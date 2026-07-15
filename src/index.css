@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-display: "Space Grotesk", sans-serif;
+
+  /* Custom zinc shades (between standard 50-step increments) */
+  --color-zinc-55: #f7f7f8;
+  --color-zinc-150: #e8e8ec;
+  --color-zinc-250: #d1d1d8;
+  --color-zinc-350: #a0a0ab;
+  --color-zinc-450: #85858f;
+  --color-zinc-550: #62626b;
+  --color-zinc-650: #494951;
+  --color-zinc-750: #333338;
+  --color-zinc-850: #1f1f23;
+
+  /* Custom indigo shades */
+  --color-indigo-450: #7272cf;
+  --color-indigo-650: #4338ca;
+
+  /* Custom rose shades */
+  --color-rose-450: #f472b6;
+  --color-rose-650: #be123c;
+  --color-rose-750: #9f1239;
+  --color-rose-850: #7f1d2b;
+
+  /* Custom emerald shades */
+  --color-emerald-750: #047857;
+
+  /* Custom amber shades */
+  --color-amber-450: #d97706;
+
+  /* Custom font sizes */
+  --font-size-2xs: 0.625rem;
+  --font-size-4xs: 0.5rem;
+
+  /* Custom shadows */
+  --shadow-2xs: 0 1px 2px 0 rgb(0 0 0 / 0.03);
+  --shadow-3xs: 0 1px 1px 0 rgb(0 0 0 / 0.02);
+
+  /* Custom spacing */
+  --spacing-4_5: 1.125rem;
+  --spacing-6_5: 1.625rem;
+}
+
+@layer base {
+  html, body, #root {
+    @apply h-full w-full;
+  }
+  
+  /* Smooth, modern scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-slate-200 rounded-full hover:bg-slate-300 transition-colors;
+  }
+}
