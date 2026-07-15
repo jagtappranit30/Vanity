@@ -1,0 +1,52 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Common helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Users Collection rules
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow create, update: if isOwner(userId)
+        && request.resource.data.keys().hasAll(['uid', 'email'])
+        && request.resource.data.uid == userId
+        && request.resource.data.email is string
+        && request.resource.data.email.size() <= 256;
+      allow delete: if false;
+
+      // Assessments sub-collection rules
+      match /assessments/{assessmentId} {
+        allow list, get: if isOwner(userId);
+        allow create: if isOwner(userId)
+          && isValidId(assessmentId)
+          && request.resource.data.keys().hasAll(['id', 'userUid', 'date', 'companyName', 'sector', 'fileName', 'fileType'])
+          && request.resource.data.userUid == userId
+          && request.resource.data.id == assessmentId
+          && request.resource.data.companyName is string
+          && request.resource.data.companyName.size() <= 250
+          && request.resource.data.sector is string
+          && request.resource.data.sector.size() <= 100
+          && request.resource.data.fileName is string
+          && request.resource.data.fileName.size() <= 250;
+        allow update: if false; // Assessments are historically immutable
+        allow delete: if isOwner(userId);
+      }
+    }
+  }
+}

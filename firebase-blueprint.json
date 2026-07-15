@@ -1,0 +1,71 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile synchronized from Firebase Authentication",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "The unique Firebase Auth UID"
+        },
+        "email": {
+          "type": "string",
+          "description": "The user's email address"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation timestamp"
+        }
+      },
+      "required": ["uid", "email"]
+    },
+    "Assessment": {
+      "title": "Assessment",
+      "description": "An SME Productivity and Financial Health assessment run",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier of the assessment run"
+        },
+        "userUid": {
+          "type": "string",
+          "description": "UID of the user who owns this assessment"
+        },
+        "date": {
+          "type": "string",
+          "description": "ISO date of the assessment run"
+        },
+        "companyName": {
+          "type": "string",
+          "description": "Name of the business being assessed"
+        },
+        "sector": {
+          "type": "string",
+          "description": "SME business sector"
+        },
+        "fileName": {
+          "type": "string",
+          "description": "Name of the uploaded source file"
+        },
+        "fileType": {
+          "type": "string",
+          "description": "Type of file uploaded (PDF or CSV)"
+        }
+      },
+      "required": ["id", "userUid", "date", "companyName", "sector", "fileName", "fileType"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Saves user profile synchronization info"
+    },
+    "/users/{userId}/assessments/{assessmentId}": {
+      "schema": "Assessment",
+      "description": "Assessments belonging to a specific user"
+    }
+  }
+}
