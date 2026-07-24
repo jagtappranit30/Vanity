@@ -1,6 +1,7 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
+import { spawn } from "child_process";
 import { createServer as createViteServer } from "vite";
 import multer from "multer";
 import dotenv from "dotenv";
@@ -12,6 +13,39 @@ import { requireAuth, optionalAuth, AuthRequest } from "./src/middleware/auth.ts
 import { eq } from "drizzle-orm";
 
 dotenv.config();
+
+// Spawn Python FastAPI RAG Microservice
+let ragProcess: any = null;
+function startRAGService() {
+  const venvPython = path.join(process.cwd(), "rag_service", "venv", "bin", "python");
+  const mainPy = path.join(process.cwd(), "rag_service", "main.py");
+
+  if (!fs.existsSync(venvPython)) {
+    console.warn("[RAG Service] Virtualenv python not found at:", venvPython);
+    return;
+  }
+
+  console.log("[RAG Service] Starting Python FastAPI RAG engine on port 8000...");
+  const ragEnv = { ...process.env };
+  delete ragEnv.PORT;
+  ragEnv.RAG_PORT = "8000";
+
+  ragProcess = spawn(venvPython, [mainPy], {
+    env: ragEnv,
+    stdio: "inherit",
+  });
+
+  ragProcess.on("error", (err: any) => {
+    console.error("[RAG Service] Failed to spawn Python RAG engine:", err);
+  });
+
+  ragProcess.on("exit", (code: number) => {
+    console.log(`[RAG Service] Process exited with code ${code}`);
+  });
+}
+
+// Call launcher
+startRAGService();
 
 const app = express();
 const PORT = 3000;
@@ -420,6 +454,15 @@ app.post("/api/assess", optionalAuth, upload.single("file"), async (req: AuthReq
     const promptText = `You are an elite SME Productivity & Financial Analyst.
 Analyze the attached financial statement (which is a ${isPDF ? "PDF" : "CSV"} document) for an SME in the '${sector}' sector.
 
+CRITICAL ANTI-HALLUCINATION INSTRUCTIONS:
+- You must ONLY extract numbers that are explicitly written in the attached text, or directly derivable from them with 100% mathematical certainty.
+- NEVER guess, approximate, estimate, or extrapolate any of these metrics: revenue, headcount, cogs, payroll, grossMargin, operatingMargin, currentAssets, currentLiabilities.
+- Micro-entity accounts in the UK or other regions frequently do NOT disclose headcount or payroll values. If headcount or payroll is not explicitly written in the document, you MUST return null. NEVER guess headcount based on company size or turnover.
+- If a metric is missing, return null for that field. Do not use 0 as a default.
+- In the "extractedJustifications" string, you MUST document the exact page number, table name, or section heading where you found each non-null value (e.g., "Revenue: Page 2, Statement of Profit or Loss, 'Turnover: £450,000'").
+- If a metric is missing and returned as null, explicitly state in the "extractedJustifications" string that it was not found (e.g., "Headcount: Not disclosed in the uploaded accounts").
+- Do NOT list hypothetical software tools in "digitalTools" simply because they are common in the industry; only list tools explicitly named or directly referred to in the document.
+
 Your task is to:
 1. Extract key financial metrics with highest precision. If a metric is not mentioned or cannot be calculated, use null.
    - revenue: annual total sales/revenue.
@@ -437,98 +480,130 @@ Your task is to:
 
 You must return the result as a single JSON object matching the requested schema exactly.`;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
-      contents: [documentPart, promptText],
-      config: {
-        temperature: 0,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            companyName: {
-              type: Type.STRING,
-              description: "The name of the company if found, or null/empty if not present."
-            },
-            revenue: {
-              type: Type.NUMBER,
-              description: "Total annual revenue. If missing, use null."
-            },
-            headcount: {
-              type: Type.INTEGER,
-              description: "Total average number of employees. If missing, use null."
-            },
-            cogs: {
-              type: Type.NUMBER,
-              description: "Cost of Goods Sold / Cost of Sales. If missing, use null."
-            },
-            payroll: {
-              type: Type.NUMBER,
-              description: "Total wage/payroll cost. If missing, use null."
-            },
-            grossMargin: {
-              type: Type.NUMBER,
-              description: "Gross Profit Margin percentage (0 to 100). If missing, use null."
-            },
-            operatingMargin: {
-              type: Type.NUMBER,
-              description: "Operating Margin percentage (0 to 100). If missing, use null."
-            },
-            currentAssets: {
-              type: Type.NUMBER,
-              description: "Total current assets from Balance Sheet. If missing, use null."
-            },
-            currentLiabilities: {
-              type: Type.NUMBER,
-              description: "Total current liabilities from Balance Sheet. If missing, use null."
-            },
-            digitalTools: {
-              type: Type.ARRAY,
-              items: { type: Type.STRING },
-              description: "Software tools, systems, or platforms explicitly mentioned or inferred from the report."
-            },
-            confidence: {
-              type: Type.NUMBER,
-              description: "Precision confidence score of extraction from 0 to 100."
-            },
-            extractedJustifications: {
-              type: Type.STRING,
-              description: "Short notes on where numbers were found (e.g., 'Revenue from Page 3 Income Statement, Headcount from Note 5')."
-            },
-            digitalMaturityLevel: {
-              type: Type.STRING,
-              description: "Must be exactly 'Low', 'Medium', or 'High'."
-            },
-            recommendations: {
-              type: Type.ARRAY,
-              items: { type: Type.STRING },
-              description: "3 to 5 customized operational/financial recommendations."
-            },
-            qualitativeAnalysis: {
-              type: Type.STRING,
-              description: "An overall summary highlighting constraints and efficiency pathways."
+    // Robust Gemini call helper with retries and model fallback
+    const callGeminiWithRetry = async (models: string[], reqOptions: any, maxRetries = 3) => {
+      let lastError: any = null;
+      for (const modelName of models) {
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+          try {
+            console.log(`[Gemini Request] Calling model=${modelName} (Attempt ${attempt}/${maxRetries})...`);
+            const res = await ai.models.generateContent({
+              ...reqOptions,
+              model: modelName,
+            });
+            if (res && res.text) {
+              return res;
             }
-          },
-          required: [
-            "companyName",
-            "revenue",
-            "headcount",
-            "digitalTools",
-            "confidence",
-            "extractedJustifications",
-            "digitalMaturityLevel",
-            "recommendations",
-            "qualitativeAnalysis"
-          ]
+          } catch (err: any) {
+            lastError = err;
+            console.warn(`[Gemini Retry Warning] Model ${modelName} attempt ${attempt} failed: ${err.message}`);
+            // Check if transient 503, 429, or unavailable
+            if (attempt < maxRetries) {
+              const backoffMs = attempt * 1500;
+              await new Promise((resolve) => setTimeout(resolve, backoffMs));
+            }
+          }
         }
       }
-    });
+      throw lastError || new Error("All Gemini model attempts failed.");
+    };
+
+    const response = await callGeminiWithRetry(
+      ["gemini-3.6-flash", "gemini-flash-latest", "gemini-3.1-pro-preview"],
+      {
+        contents: [documentPart, promptText],
+        config: {
+          temperature: 0,
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              companyName: {
+                type: Type.STRING,
+                description: "The name of the company if found, or null/empty if not present."
+              },
+              revenue: {
+                type: Type.NUMBER,
+                description: "Total annual revenue. If missing, use null."
+              },
+              headcount: {
+                type: Type.INTEGER,
+                description: "Total average number of employees. If missing, use null."
+              },
+              cogs: {
+                type: Type.NUMBER,
+                description: "Cost of Goods Sold / Cost of Sales. If missing, use null."
+              },
+              payroll: {
+                type: Type.NUMBER,
+                description: "Total wage/payroll cost. If missing, use null."
+              },
+              grossMargin: {
+                type: Type.NUMBER,
+                description: "Gross Profit Margin percentage (0 to 100). If missing, use null."
+              },
+              operatingMargin: {
+                type: Type.NUMBER,
+                description: "Operating Margin percentage (0 to 100). If missing, use null."
+              },
+              currentAssets: {
+                type: Type.NUMBER,
+                description: "Total current assets from Balance Sheet. If missing, use null."
+              },
+              currentLiabilities: {
+                type: Type.NUMBER,
+                description: "Total current liabilities from Balance Sheet. If missing, use null."
+              },
+              digitalTools: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING },
+                description: "Software tools, systems, or platforms explicitly mentioned or inferred from the report."
+              },
+              confidence: {
+                type: Type.NUMBER,
+                description: "Precision confidence score of extraction from 0 to 100."
+              },
+              extractedJustifications: {
+                type: Type.STRING,
+                description: "Short notes on where numbers were found (e.g., 'Revenue from Page 3 Income Statement, Headcount from Note 5')."
+              },
+              digitalMaturityLevel: {
+                type: Type.STRING,
+                description: "Must be exactly 'Low', 'Medium', or 'High'."
+              },
+              recommendations: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING },
+                description: "3 to 5 customized operational/financial recommendations."
+              },
+              qualitativeAnalysis: {
+                type: Type.STRING,
+                description: "An overall summary highlighting constraints and efficiency pathways."
+              }
+            },
+            required: [
+              "companyName",
+              "revenue",
+              "headcount",
+              "digitalTools",
+              "confidence",
+              "extractedJustifications",
+              "digitalMaturityLevel",
+              "recommendations",
+              "qualitativeAnalysis"
+            ]
+          }
+        }
+      }
+    );
 
     if (!response.text) {
       throw new Error("Empty response from Gemini assessment engine.");
     }
 
-    const geminiResult = JSON.parse(response.text.trim());
+    const rawText = response.text.trim();
+    const cleanedText = rawText.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/i, "").trim();
+    const geminiResult = JSON.parse(cleanedText);
 
     // Merge custom name if provided
     const companyName = customCompanyName || geminiResult.companyName || "SME Enterprise";
@@ -581,6 +656,25 @@ You must return the result as a single JSON object matching the requested schema
       });
     }
 
+    // Auto-index document into Python RAG service
+    try {
+      const formData = new FormData();
+      formData.append("doc_id", newRun.id);
+      const blob = new Blob([file.buffer], { type: mimeType });
+      formData.append("file", blob, file.originalname);
+
+      fetch("http://127.0.0.1:8000/index", {
+        method: "POST",
+        body: formData,
+      }).then(r => r.json()).then(resData => {
+        console.log("[RAG Auto-Index] Document successfully indexed:", resData);
+      }).catch(err => {
+        console.warn("[RAG Auto-Index] Non-blocking index error:", err.message);
+      });
+    } catch (ragErr: any) {
+      console.warn("[RAG Auto-Index Warning]:", ragErr.message);
+    }
+
     res.json(newRun);
 
   } catch (error: any) {
@@ -589,6 +683,71 @@ You must return the result as a single JSON object matching the requested schema
       error: `Assessment failed: ${error.message || error}`
     });
   }
+});
+
+// --- RAG PYTHON MICROSERVICE PROXY ENDPOINTS ---
+
+// Check Python RAG service health
+app.get("/api/rag/health", async (req, res) => {
+  try {
+    const response = await fetch("http://127.0.0.1:8000/health");
+    const data = await response.json();
+    res.json(data);
+  } catch (err: any) {
+    res.status(503).json({ status: "offline", error: "RAG microservice unavailable: " + err.message });
+  }
+});
+
+// Query RAG system for document context & vector search QA
+app.post("/api/rag/query", async (req, res) => {
+  try {
+    const { doc_id, question, top_k } = req.body;
+    if (!doc_id || !question) {
+      return res.status(400).json({ error: "doc_id and question are required." });
+    }
+
+    const response = await fetch("http://127.0.0.1:8000/query", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ doc_id, question, top_k: top_k || 4 }),
+    });
+
+    const data = await response.json();
+    res.status(response.status).json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to communicate with Python RAG engine: " + err.message });
+  }
+});
+
+// Manual index document into RAG system
+app.post("/api/rag/index", upload.single("file"), async (req, res) => {
+  try {
+    const file = req.file;
+    const docId = req.body.doc_id;
+    if (!file || !docId) {
+      return res.status(400).json({ error: "file and doc_id are required." });
+    }
+
+    const formData = new FormData();
+    formData.append("doc_id", docId);
+    const blob = new Blob([file.buffer], { type: file.mimetype });
+    formData.append("file", blob, file.originalname);
+
+    const response = await fetch("http://127.0.0.1:8000/index", {
+      method: "POST",
+      body: formData,
+    });
+
+    const data = await response.json();
+    res.status(response.status).json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to index document in RAG engine: " + err.message });
+  }
+});
+
+// Catch-all 404 handler for /api routes to prevent HTML response fallthrough to Vite
+app.use("/api/*", (req, res) => {
+  res.status(404).json({ error: `API endpoint not found: ${req.method} ${req.originalUrl}` });
 });
 
 // Custom error handling middleware for all API routes to ensure JSON responses instead of HTML fallbacks

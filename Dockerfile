@@ -1,18 +1,36 @@
-# Build stage
-FROM node:20-alpine AS builder
+FROM node:20-bookworm-slim
+
+# Install system dependencies (Python, virtualenv, netcat for readiness check)
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    python3-venv \
+    netcat-openbsd \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
+
+# Copy dependency files first
 COPY package*.json ./
-RUN npm install
+COPY rag_service/requirements.txt ./rag_service/requirements.txt
+
+# Install Node dependencies
+RUN npm ci
+
+# Create Python virtual environment and install dependencies
+RUN python3 -m venv /app/rag_service/venv && \
+    /app/rag_service/venv/bin/pip install --no-cache-dir --upgrade pip && \
+    /app/rag_service/venv/bin/pip install --no-cache-dir -r /app/rag_service/requirements.txt
+
+# Copy all application code
 COPY . .
+
+# Build the Vite frontend and compile server.ts
 RUN npm run build
 
-# Production stage
-FROM node:20-alpine
-WORKDIR /app
-COPY package*.json ./
-RUN npm install --only=production
-COPY --from=builder /app/dist ./dist
-ENV NODE_ENV=production
-ENV PORT=3000
+# Make the entrypoint script executable
+RUN chmod +x entrypoint.sh
+
 EXPOSE 3000
-CMD ["npm", "run", "start"]
+
+ENTRYPOINT ["/app/entrypoint.sh"]

@@ -7,6 +7,7 @@ import { useTheme } from "./context/ThemeContext.tsx";
 import UploadForm from "./components/UploadForm";
 import ResultsDashboard from "./components/ResultsDashboard";
 import HistoryList from "./components/HistoryList";
+import { VantlyLogo } from "./components/VantlyLogo";
 
 export default function App() {
   const { theme, toggleTheme } = useTheme();
@@ -195,17 +196,15 @@ export default function App() {
   if (!user && !isGuestMode) {
     return (
       <div id="login-landing-container" className="min-h-screen flex flex-col bg-zinc-50 dark:bg-zinc-950 text-zinc-800 dark:text-zinc-100 transition-colors duration-300">
-        <header className="w-full bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 px-6 py-4 shadow-3xs transition-colors duration-300">
+        <header className="w-full bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 px-6 py-4.5 transition-colors duration-300">
           <div className="max-w-7xl mx-auto flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-zinc-900 text-white flex items-center justify-center font-display font-black text-lg shadow-lg">
-                V
-              </div>
+              <VantlyLogo className="w-10 h-10" />
               <div>
                 <span className="block font-display font-black text-base tracking-tight text-zinc-950 dark:text-white">
-                  Vantly
+                  Vantly AI
                 </span>
-                <span className="block text-4xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest leading-none mt-1">
+                <span className="block text-[9px] font-extrabold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest leading-none mt-1">
                   See your business clearly
                 </span>
               </div>
@@ -213,113 +212,114 @@ export default function App() {
             <div className="flex items-center gap-4">
               <button
                 onClick={toggleTheme}
-                className="p-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-all cursor-pointer shadow-sm border border-zinc-200/50 dark:border-zinc-750"
+                className="p-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-350 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-all cursor-pointer border border-zinc-200/50 dark:border-zinc-700/80"
                 title={theme === "light" ? "Switch to Dark Mode" : "Switch to Light Mode"}
               >
                 {theme === "light" ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
               </button>
-              <div className="flex items-center gap-1.5 text-2xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
-                <span className="w-2 h-2 rounded-full bg-indigo-600 animate-pulse"></span>
-                Secure Database Online
+              <div className="flex items-center gap-1.5 text-[10px] font-bold text-zinc-450 dark:text-zinc-400 uppercase tracking-widest">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                Secure Cloud Core
               </div>
             </div>
           </div>
         </header>
 
-        <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-12 flex flex-col justify-center">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-5xl mx-auto">
+        <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-14 flex flex-col justify-center">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-5xl mx-auto w-full">
             {/* Main Welcome Bento Block */}
-            <div className="lg:col-span-2 bg-zinc-900 text-white rounded-[2.5rem] p-10 shadow-xl relative overflow-hidden flex flex-col md:flex-row justify-between gap-6 min-h-[360px]">
-              <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-500 rounded-full blur-[100px] opacity-20 -mr-20 -mt-20"></div>
+            <div className="lg:col-span-2 bg-zinc-900 text-white rounded-[2.5rem] p-10 shadow-2xl relative overflow-hidden flex flex-col md:flex-row justify-between gap-8 min-h-[380px]">
+              {/* Subtle background glow */}
+              <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-500 rounded-full blur-[100px] opacity-[0.16] -mr-16 -mt-16 pointer-events-none"></div>
               
-              <div className="relative z-10 max-w-sm flex flex-col justify-between h-full">
+              <div className="relative z-10 max-w-md flex flex-col justify-between h-full space-y-6">
                 <div>
-                  <span className="text-xs font-bold uppercase tracking-widest text-indigo-400">
-                    Vantly Assessment Portal
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-400 bg-indigo-950/50 px-2.5 py-1 rounded-full border border-indigo-900/40">
+                    SME Productivity Portal
                   </span>
-                  <h1 className="text-3xl sm:text-4xl font-display font-black tracking-tight mt-3 mb-4 leading-tight">
+                  <h1 className="text-3xl sm:text-4xl font-display font-black tracking-tight mt-5 mb-4 leading-tight">
                     See your business clearly
                   </h1>
                   <p className="text-zinc-300 text-xs sm:text-sm leading-relaxed font-medium">
-                    Upload SME accounts as PDF or CSV. Our system leverages advanced Gemini models and direct UK sector percentiles to evaluate productivity leverage, gross margins, and liquidity health.
+                    Upload SME accounts as PDF or CSV. Our platform leverages advanced Gemini models and direct UK sector percentiles to evaluate productivity leverage, gross margins, and liquidity health.
                   </p>
                 </div>
 
-                <div className="pt-6 mt-6 border-t border-zinc-800 flex flex-wrap items-center gap-4 text-3xs font-mono text-zinc-500 uppercase tracking-wider">
-                  <span className="flex items-center gap-1">
-                    <Database className="w-3.5 h-3.5 text-indigo-500" />
+                <div className="pt-5 border-t border-zinc-800/80 flex flex-wrap items-center gap-x-4 gap-y-2 text-[10px] font-mono text-zinc-500 uppercase tracking-wider">
+                  <span className="flex items-center gap-1.5 font-bold">
+                    <Database className="w-4 h-4 text-indigo-400" />
                     Cloud SQL Relational Storage
                   </span>
                   <span>•</span>
-                  <span>Analytics Engine v2026</span>
+                  <span className="font-bold">Intelligence Suite v2.6</span>
                 </div>
               </div>
 
               {/* High-quality CSS UI preview mock card */}
               <div className="relative z-10 hidden md:flex flex-col justify-between w-64 bg-zinc-950/70 border border-zinc-800/80 rounded-3xl p-5 shadow-2xl backdrop-blur-md self-center">
-                <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3 mb-3">
+                <div className="flex items-center justify-between border-b border-zinc-800/60 pb-3 mb-3">
                   <div className="flex items-center gap-2">
-                    <div className="w-2.5 h-2.5 rounded-full bg-indigo-500 animate-pulse"></div>
-                    <span className="text-3xs font-mono text-zinc-400 font-bold tracking-widest uppercase">Live Demo Metrics</span>
+                    <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></div>
+                    <span className="text-[9px] font-mono text-zinc-400 font-bold tracking-widest uppercase">Platform Metrics</span>
                   </div>
-                  <span className="text-4xs font-bold text-zinc-500 bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-850">VAN v3</span>
+                  <span className="text-[9px] font-bold text-zinc-500 bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-850">VAN v3</span>
                 </div>
 
-                <div className="space-y-3.5">
+                <div className="space-y-4">
                   <div>
-                    <span className="text-4xs font-bold text-zinc-500 uppercase tracking-wider block">Company Name</span>
-                    <span className="text-xs font-bold text-zinc-100 block mt-0.5 truncate">Sterling Manufacturing Ltd</span>
+                    <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-wider block">Company Name</span>
+                    <span className="text-xs font-bold text-zinc-150 block mt-0.5 truncate">Sterling Manufacturing Ltd</span>
                   </div>
 
                   <div>
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-4xs font-bold text-zinc-500 uppercase tracking-wider">Productivity Index</span>
+                      <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-wider">Productivity Index</span>
                       <span className="text-2xs font-mono font-bold text-indigo-400">84 / 100</span>
                     </div>
-                    <div className="w-full bg-zinc-800/80 h-2 rounded-full overflow-hidden">
+                    <div className="w-full bg-zinc-800/50 h-2 rounded-full overflow-hidden">
                       <div className="bg-indigo-500 h-full rounded-full" style={{ width: "84%" }}></div>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2 pt-1">
-                    <div className="bg-zinc-900/60 p-2 rounded-xl border border-zinc-850">
-                      <span className="text-4xs text-zinc-500 font-bold uppercase tracking-wider block">Gross Margin</span>
+                    <div className="bg-zinc-900/60 p-2.5 rounded-xl border border-zinc-850">
+                      <span className="text-[9px] text-zinc-550 font-bold uppercase tracking-wider block">Gross Margin</span>
                       <span className="text-xs font-bold text-emerald-400 block mt-0.5">42.5%</span>
                     </div>
-                    <div className="bg-zinc-900/60 p-2 rounded-xl border border-zinc-850">
-                      <span className="text-4xs text-zinc-500 font-bold uppercase tracking-wider block">Operating Ratio</span>
+                    <div className="bg-zinc-900/60 p-2.5 rounded-xl border border-zinc-850">
+                      <span className="text-[9px] text-zinc-550 font-bold uppercase tracking-wider block">Operating Ratio</span>
                       <span className="text-xs font-bold text-indigo-400 block mt-0.5">18.2%</span>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-1.5 text-4xs font-semibold text-indigo-300 bg-indigo-950/40 border border-indigo-900/30 px-2 py-1 rounded-lg">
-                    <CheckCircle className="w-3 h-3 text-indigo-400 shrink-0" />
-                    Verified via sectoral benchmarks
+                  <div className="flex items-center gap-1.5 text-[9px] font-semibold text-indigo-300 bg-indigo-950/40 border border-indigo-900/30 px-2 py-1 rounded-lg">
+                    <CheckCircle className="w-3.5 h-3.5 text-indigo-450 shrink-0" />
+                    Verified via benchmarks
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Login Control Bento Block */}
-            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-[2.5rem] p-10 shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex flex-col justify-between items-center text-center min-h-[360px] transition-colors duration-300">
+            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-[2.5rem] p-10 shadow-sm flex flex-col justify-between items-center text-center min-h-[380px] transition-colors duration-300">
               <div className="w-full">
-                <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto mb-4">
-                  <LogIn className="w-6 h-6" />
+                <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto mb-4 border border-indigo-100/50 dark:border-indigo-900/30">
+                  <LogIn className="w-5 h-5" />
                 </div>
-                <h2 className="text-xl font-display font-black text-zinc-950 dark:text-white mb-2">
+                <h2 className="text-xl font-display font-black text-zinc-950 dark:text-white mb-2 tracking-tight">
                   Access Portal
                 </h2>
-                <p className="text-zinc-500 dark:text-zinc-400 text-xs leading-relaxed max-w-xs mx-auto">
+                <p className="text-zinc-500 dark:text-zinc-400 text-xs leading-relaxed max-w-xs mx-auto font-semibold">
                   Sign in with Google to sync across devices and export to Docs, or explore instantly with Direct Guest Access.
                 </p>
               </div>
 
-              <div className="w-full space-y-3">
+              <div className="w-full space-y-3 my-6">
                 <button
                   onClick={signInWithGoogle}
-                  className="w-full py-3.5 px-6 bg-zinc-900 dark:bg-zinc-800 hover:bg-zinc-800 dark:hover:bg-zinc-700 active:bg-zinc-950 text-white font-bold text-sm rounded-2xl flex items-center justify-center gap-3 shadow-lg shadow-zinc-200 dark:shadow-none hover:shadow-xl transition-all cursor-pointer border border-transparent dark:border-zinc-700"
+                  className="w-full py-3.5 px-6 bg-zinc-900 dark:bg-zinc-800 hover:bg-zinc-850 dark:hover:bg-zinc-700 text-white font-bold text-xs rounded-2xl flex items-center justify-center gap-3 shadow-md hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer border border-transparent dark:border-zinc-700"
                 >
-                  <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
                     <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
                     <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
                     <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
@@ -330,53 +330,53 @@ export default function App() {
 
                 <button
                   onClick={handleEnterAsGuest}
-                  className="w-full py-3.5 px-6 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 active:bg-indigo-200 text-indigo-600 dark:text-indigo-400 font-bold text-sm rounded-2xl flex items-center justify-center gap-2 border border-indigo-100 dark:border-indigo-900/50 transition-all cursor-pointer shadow-xs"
+                  className="w-full py-3.5 px-6 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 font-bold text-xs rounded-2xl flex items-center justify-center gap-2 border border-indigo-150/40 dark:border-indigo-900/40 hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer shadow-2xs"
                 >
-                  <ArrowRight className="w-4 h-4 shrink-0" />
+                  <ArrowRight className="w-4 h-4 shrink-0 animate-pulse" />
                   Direct Access (Guest Mode)
                 </button>
               </div>
 
-              <div className="text-4xs text-zinc-400 dark:text-zinc-500 font-bold uppercase tracking-wider">
+              <div className="text-[9px] text-zinc-400 dark:text-zinc-500 font-bold uppercase tracking-widest">
                 No registration required for guest sessions
               </div>
             </div>
 
             {/* Minor Info Bento blocks */}
-            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-[2rem] p-6 shadow-3xs hover:shadow-md transition-all flex flex-col justify-between min-h-[160px] transition-colors duration-300">
+            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-[2rem] p-6.5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between min-h-[170px] transition-colors duration-300">
               <div>
-                <div className="w-8 h-8 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/45 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mb-3">
+                <div className="w-8 h-8 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/45 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mb-3.5 border border-indigo-100/30 dark:border-indigo-900/20">
                   <Users className="w-4 h-4" />
                 </div>
-                <span className="block text-indigo-600 dark:text-indigo-400 text-xs font-bold uppercase tracking-wider mb-1">Labour Pillar</span>
-                <h4 className="font-bold text-zinc-900 dark:text-white text-sm mb-1">Leverage & Personnel Output</h4>
-                <p className="text-zinc-500 dark:text-zinc-400 text-2xs leading-relaxed">
+                <span className="block text-indigo-600 dark:text-indigo-400 text-[10px] font-bold uppercase tracking-widest mb-1">Labour Pillar</span>
+                <h4 className="font-bold text-zinc-900 dark:text-white text-xs mb-1">Leverage & Personnel Output</h4>
+                <p className="text-zinc-500 dark:text-zinc-400 text-[10px] leading-relaxed font-semibold">
                   Evaluates employee productivity metrics and payroll costs against certified regional SME datasets.
                 </p>
               </div>
             </div>
 
-            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-[2rem] p-6 shadow-3xs hover:shadow-md transition-all flex flex-col justify-between min-h-[160px] transition-colors duration-300">
+            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-[2rem] p-6.5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between min-h-[170px] transition-colors duration-300">
               <div>
-                <div className="w-8 h-8 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/45 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mb-3">
+                <div className="w-8 h-8 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/45 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mb-3.5 border border-indigo-100/30 dark:border-indigo-900/20">
                   <BarChart3 className="w-4 h-4" />
                 </div>
-                <span className="block text-indigo-600 dark:text-indigo-400 text-xs font-bold uppercase tracking-wider mb-1">Financial Pillar</span>
-                <h4 className="font-bold text-zinc-900 dark:text-white text-sm mb-1">Margin & Defensive Liquidity</h4>
-                <p className="text-zinc-500 dark:text-zinc-400 text-2xs leading-relaxed">
+                <span className="block text-indigo-600 dark:text-indigo-400 text-[10px] font-bold uppercase tracking-widest mb-1">Financial Pillar</span>
+                <h4 className="font-bold text-zinc-900 dark:text-white text-xs mb-1">Margin & Defensive Liquidity</h4>
+                <p className="text-zinc-500 dark:text-zinc-400 text-[10px] leading-relaxed font-semibold">
                   Applies exact margin benchmarks and current ratio liquidity checks to analyze SME operating headroom.
                 </p>
               </div>
             </div>
 
-            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-[2rem] p-6 shadow-3xs hover:shadow-md transition-all flex flex-col justify-between min-h-[160px] transition-colors duration-300">
+            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-[2rem] p-6.5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between min-h-[170px] transition-colors duration-300">
               <div>
-                <div className="w-8 h-8 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/45 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mb-3">
+                <div className="w-8 h-8 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/45 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mb-3.5 border border-indigo-100/30 dark:border-indigo-900/20">
                   <FileText className="w-4 h-4" />
                 </div>
-                <span className="block text-indigo-600 dark:text-indigo-400 text-xs font-bold uppercase tracking-wider mb-1">Workspace Integration</span>
-                <h4 className="font-bold text-zinc-900 dark:text-white text-sm mb-1">Direct Google Docs Export</h4>
-                <p className="text-zinc-500 dark:text-zinc-400 text-2xs leading-relaxed">
+                <span className="block text-indigo-600 dark:text-indigo-400 text-[10px] font-bold uppercase tracking-widest mb-1">Workspace Integration</span>
+                <h4 className="font-bold text-zinc-900 dark:text-white text-xs mb-1">Direct Google Docs Export</h4>
+                <p className="text-zinc-500 dark:text-zinc-400 text-[10px] leading-relaxed font-semibold">
                   Export dynamic, fully formatted business assessment reports straight into Google Docs via Workspace APIs.
                 </p>
               </div>
@@ -384,8 +384,8 @@ export default function App() {
           </div>
         </main>
 
-        <footer className="w-full bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800 py-6 px-6 mt-auto text-center text-4xs text-zinc-400 dark:text-zinc-500 font-bold uppercase tracking-widest transition-colors duration-300">
-          Vantly • See your business clearly
+        <footer className="w-full bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800 py-6 px-6 mt-auto text-center text-[9px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 transition-colors duration-300">
+          Vantly AI • See your business clearly
         </footer>
       </div>
     );
@@ -398,12 +398,10 @@ export default function App() {
       <header className="sticky top-0 z-20 w-full bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 shadow-[0_8px_30px_rgb(0,0,0,0.02)] px-6 py-4 transition-colors duration-300">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-zinc-900 text-white flex items-center justify-center font-display font-black text-lg shadow-lg">
-              V
-            </div>
+            <VantlyLogo className="w-10 h-10" />
             <div>
               <span className="block font-display font-black text-base tracking-tight text-zinc-950 dark:text-white">
-                Vantly
+                Vantly AI
               </span>
               <span className="block text-4xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest leading-none mt-1">
                 See your business clearly

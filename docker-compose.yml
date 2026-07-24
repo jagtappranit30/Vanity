@@ -1,16 +1,43 @@
 version: '3.8'
 
 services:
-  web:
-    build: .
+  db:
+    image: postgres:15-alpine
+    container_name: vantly-db
+    environment:
+      POSTGRES_DB: vantly
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d vantly"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vantly-app
+    depends_on:
+      db:
+        condition: service_healthy
     ports:
       - "3000:3000"
     environment:
+      - SQL_HOST=db
+      - SQL_DB_NAME=vantly
+      - SQL_USER=postgres
+      - SQL_PASSWORD=postgres
+      - SQL_ADMIN_USER=postgres
+      - SQL_ADMIN_PASSWORD=postgres
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
       - NODE_ENV=production
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - APP_URL=${APP_URL:-http://localhost:3000}
-      - SQL_HOST=${SQL_HOST}
-      - SQL_USER=${SQL_USER}
-      - SQL_PASSWORD=${SQL_PASSWORD}
-      - SQL_DB_NAME=${SQL_DB_NAME}
     restart: always
+
+volumes:
+  pgdata:

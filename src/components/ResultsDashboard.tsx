@@ -1,13 +1,15 @@
 import React, { useState } from "react";
 import { 
   Award, TrendingUp, DollarSign, Users, ShieldAlert, Cpu, 
-  Lightbulb, CheckCircle, FileText, Download, Trash2, Calendar, FileJson, RefreshCw, ExternalLink
+  Lightbulb, CheckCircle, FileText, Download, Trash2, Calendar, 
+  RefreshCw, ExternalLink, Activity, Sparkles, Building, Layers
 } from "lucide-react";
 import { motion } from "motion/react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell } from "recharts";
 import { AssessmentRun } from "../types";
 import { useAuth } from "../context/AuthContext.tsx";
 import { generateAssessmentPDF } from "../utils/pdfGenerator";
+import { RAGChat } from "./RAGChat.tsx";
 
 interface ResultsDashboardProps {
   assessment: AssessmentRun | null;
@@ -18,6 +20,27 @@ interface ResultsDashboardProps {
   loadingSector?: string;
 }
 
+// Custom Premium Tooltip Component
+const CustomTooltip = ({ active, payload, label, formatter }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-white dark:bg-zinc-950 border border-zinc-150 dark:border-zinc-800 p-3.5 rounded-xl shadow-xl font-sans text-2xs md:text-xs space-y-1.5 transition-all">
+        <p className="font-bold text-zinc-900 dark:text-zinc-100">{label}</p>
+        {payload.map((p: any, idx: number) => (
+          <div key={idx} className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: p.fill || p.color || "#4f46e5" }} />
+            <span className="text-zinc-450 dark:text-zinc-500 font-bold uppercase tracking-wider">{p.name || p.dataKey}:</span>
+            <span className="font-mono font-bold text-zinc-900 dark:text-white">
+              {formatter ? formatter(p.value) : p.value}
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  return null;
+};
+
 export default function ResultsDashboard({
   assessment,
   onBack,
@@ -27,7 +50,7 @@ export default function ResultsDashboard({
   loadingSector = "Manufacturing"
 }: ResultsDashboardProps) {
   const { idToken, googleAccessToken, signInWithGoogle } = useAuth();
-  const [activeTab, setActiveTab] = useState<"overview" | "labour" | "financial" | "digital" | "justification">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "labour" | "financial" | "digital" | "justification" | "rag">("overview");
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const [docUrl, setDocUrl] = useState<string | null>(null);
@@ -64,12 +87,14 @@ export default function ResultsDashboard({
         {/* Header Actions Skeleton */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-6 border-b border-zinc-200 dark:border-zinc-800">
           <div className="space-y-2">
-            <div className="flex items-center gap-2 text-xs font-bold text-indigo-400">
-              <span>←</span>
-              <div className="w-48 h-3.5 bg-zinc-200 dark:bg-zinc-800 rounded"></div>
-            </div>
+            <button
+              onClick={onBack}
+              className="text-xs font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5 transition-colors uppercase tracking-wider mb-2 cursor-pointer"
+            >
+              ← Cancel and Return
+            </button>
             <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-display font-bold text-zinc-900 dark:text-white truncate">
+              <h1 className="text-3xl font-display font-black text-zinc-900 dark:text-white truncate">
                 {displayCompany}
               </h1>
               <span className="px-2.5 py-1 rounded-full text-2xs font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 border border-indigo-150 dark:border-indigo-900/50">
@@ -77,38 +102,38 @@ export default function ResultsDashboard({
               </span>
             </div>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-400 dark:text-zinc-550 mt-1">
-              <div className="w-24 h-4 bg-zinc-200 dark:bg-zinc-800 rounded"></div>
-              <div className="w-32 h-4 bg-zinc-200 dark:bg-zinc-800 rounded"></div>
+              <div className="w-24 h-4 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse"></div>
+              <div className="w-32 h-4 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse"></div>
             </div>
           </div>
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
-            <div className="w-36 h-9 bg-zinc-200 dark:bg-zinc-800 rounded-xl"></div>
-            <div className="w-28 h-9 bg-zinc-100 dark:bg-zinc-850 rounded-xl"></div>
+            <div className="w-36 h-9 bg-zinc-200 dark:bg-zinc-800 rounded-xl animate-pulse"></div>
+            <div className="w-28 h-9 bg-zinc-100 dark:bg-zinc-850 rounded-xl animate-pulse"></div>
           </div>
         </div>
 
         {/* Main Stats Bento Grid Skeleton */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Productivity Index Card Skeleton */}
-          <div className="md:col-span-2 bg-zinc-900 dark:bg-zinc-900/80 border border-transparent dark:border-zinc-800 text-white rounded-[2rem] p-8 shadow-2xl relative overflow-hidden flex flex-col justify-between min-h-[220px]">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500 rounded-full blur-[80px] opacity-25 -mr-16 -mt-16"></div>
+          <div className="md:col-span-2 bg-zinc-900 dark:bg-zinc-900 border border-zinc-800 text-white rounded-[2rem] p-8 shadow-2xl relative overflow-hidden flex flex-col justify-between min-h-[220px]">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500 rounded-full blur-[80px] opacity-25 -mr-16 -mt-16 animate-pulse"></div>
             
             <div className="relative z-10">
-              <span className="text-xs font-bold uppercase tracking-widest text-zinc-450 dark:text-zinc-550">
+              <span className="text-xs font-bold uppercase tracking-widest text-zinc-450 dark:text-zinc-500">
                 Vantly Productivity Index
               </span>
               <div className="flex items-baseline gap-4 mt-3">
                 <div className="h-16 w-32 bg-zinc-800 dark:bg-zinc-800/80 rounded-2xl animate-pulse"></div>
-                <div className="w-24 h-6 bg-indigo-600/30 rounded-full"></div>
+                <div className="w-24 h-6 bg-indigo-600/30 rounded-full animate-pulse"></div>
               </div>
             </div>
 
             {/* AI Status Step Monitor integrated directly into skeleton */}
-            <div className="relative z-10 border-t border-zinc-800/60 dark:border-zinc-800/40 pt-5 mt-4 flex items-center gap-3">
+            <div className="relative z-10 border-t border-zinc-800/60 pt-5 mt-4 flex items-center gap-3">
               <div className="w-5 h-5 border-2 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin"></div>
               <div className="flex-1">
-                <span className="text-4xs text-indigo-400 font-bold block uppercase tracking-wider">Analysis Phase</span>
+                <span className="text-[10px] text-indigo-400 font-bold block uppercase tracking-wider">Analysis Phase</span>
                 <span className="text-xs font-bold text-zinc-100 block truncate mt-0.5 animate-pulse">
                   {LOADING_STEPS[loadingStep]}
                 </span>
@@ -120,7 +145,7 @@ export default function ResultsDashboard({
           </div>
 
           {/* Pillar Breakdown Stats Card Skeleton */}
-          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-[2rem] p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex flex-col justify-between">
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-[2rem] p-8 shadow-[0_8px_30px_rgb(0,0,0,0.02)] flex flex-col justify-between">
             <div>
               <span className="text-xs font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
                 Pillar Breakouts
@@ -129,8 +154,8 @@ export default function ResultsDashboard({
                 {/* Labour Efficiency Pillar */}
                 <div>
                   <div className="flex justify-between mb-1.5">
-                    <div className="w-24 h-3.5 bg-zinc-200 dark:bg-zinc-850 rounded"></div>
-                    <div className="w-10 h-3.5 bg-zinc-200 dark:bg-zinc-850 rounded"></div>
+                    <div className="w-24 h-3.5 bg-zinc-200 dark:bg-zinc-850 rounded animate-pulse"></div>
+                    <div className="w-10 h-3.5 bg-zinc-200 dark:bg-zinc-850 rounded animate-pulse"></div>
                   </div>
                   <div className="w-full bg-zinc-100 dark:bg-zinc-850 h-2.5 rounded-full overflow-hidden">
                     <div className="bg-zinc-300 dark:bg-zinc-750 h-full rounded-full w-1/2"></div>
@@ -140,8 +165,8 @@ export default function ResultsDashboard({
                 {/* Financial Health Pillar */}
                 <div>
                   <div className="flex justify-between mb-1.5">
-                    <div className="w-24 h-3.5 bg-zinc-200 dark:bg-zinc-850 rounded"></div>
-                    <div className="w-10 h-3.5 bg-zinc-200 dark:bg-zinc-850 rounded"></div>
+                    <div className="w-24 h-3.5 bg-zinc-200 dark:bg-zinc-850 rounded animate-pulse"></div>
+                    <div className="w-10 h-3.5 bg-zinc-200 dark:bg-zinc-850 rounded animate-pulse"></div>
                   </div>
                   <div className="w-full bg-zinc-100 dark:bg-zinc-850 h-2.5 rounded-full overflow-hidden">
                     <div className="bg-zinc-300 dark:bg-zinc-750 h-full rounded-full w-[45%]"></div>
@@ -151,8 +176,8 @@ export default function ResultsDashboard({
                 {/* Digital Maturity Pillar */}
                 <div>
                   <div className="flex justify-between mb-1.5">
-                    <div className="w-24 h-3.5 bg-zinc-200 dark:bg-zinc-850 rounded"></div>
-                    <div className="w-10 h-3.5 bg-zinc-200 dark:bg-zinc-850 rounded"></div>
+                    <div className="w-24 h-3.5 bg-zinc-200 dark:bg-zinc-850 rounded animate-pulse"></div>
+                    <div className="w-10 h-3.5 bg-zinc-200 dark:bg-zinc-850 rounded animate-pulse"></div>
                   </div>
                   <div className="w-full bg-zinc-100 dark:bg-zinc-850 h-2.5 rounded-full overflow-hidden">
                     <div className="bg-zinc-200 dark:bg-zinc-800 h-full rounded-full w-[60%]"></div>
@@ -160,50 +185,7 @@ export default function ResultsDashboard({
                 </div>
               </div>
             </div>
-            <div className="w-48 h-3.5 bg-zinc-200 dark:bg-zinc-850 rounded mt-4"></div>
-          </div>
-        </div>
-
-        {/* Tabs Navigation Skeleton */}
-        <div className="flex border-b border-zinc-200 dark:border-zinc-800 overflow-x-auto pb-1 gap-2 scrollbar-none">
-          {["AI Recommendations", "Labour Efficiency", "Financial Health", "Digital Maturity", "Audit Traceability"].map((tabLabel, idx) => (
-            <div
-              key={idx}
-              className={`px-4 py-2.5 border-b-2 border-transparent font-bold text-xs flex items-center gap-2 shrink-0 ${
-                idx === 0 ? "border-indigo-600/40 text-indigo-600/40 bg-indigo-50/5 dark:bg-indigo-950/10 rounded-t-xl" : "text-zinc-300 dark:text-zinc-650"
-              }`}
-            >
-              <div className="w-3.5 h-3.5 rounded bg-zinc-200 dark:bg-zinc-800"></div>
-              <span>{tabLabel}</span>
-            </div>
-          ))}
-        </div>
-
-        {/* Tab Panel Content Skeleton */}
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-[2rem] p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] min-h-[350px] space-y-6">
-          <div className="space-y-3">
-            <div className="w-32 h-4 bg-zinc-200 dark:bg-zinc-850 rounded-md"></div>
-            <div className="w-64 h-6 bg-zinc-250 dark:bg-zinc-800 rounded-lg"></div>
-            <div className="space-y-2 bg-zinc-50/70 dark:bg-zinc-950/40 p-5 rounded-2xl border border-zinc-150 dark:border-zinc-800">
-              <div className="w-full h-3.5 bg-zinc-200 dark:bg-zinc-800 rounded-lg"></div>
-              <div className="w-[95%] h-3.5 bg-zinc-200 dark:bg-zinc-800 rounded-lg"></div>
-              <div className="w-[85%] h-3.5 bg-zinc-200 dark:bg-zinc-800 rounded-lg"></div>
-            </div>
-          </div>
-          
-          <div className="pt-4 space-y-4">
-            <div className="w-56 h-6 bg-zinc-250 dark:bg-zinc-850 rounded-lg"></div>
-            <div className="space-y-3">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="p-5 rounded-2xl border border-zinc-150 dark:border-zinc-850/80 bg-white dark:bg-zinc-900 flex gap-3">
-                  <div className="w-6 h-6 rounded-full bg-zinc-200 dark:bg-zinc-850 shrink-0"></div>
-                  <div className="space-y-2 flex-1 pt-1">
-                    <div className="w-[80%] h-3.5 bg-zinc-200 dark:bg-zinc-800 rounded-md"></div>
-                    <div className="w-[50%] h-3 bg-zinc-150 dark:bg-zinc-850 rounded-md"></div>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <div className="w-48 h-3.5 bg-zinc-200 dark:bg-zinc-850 rounded mt-4 animate-pulse"></div>
           </div>
         </div>
       </div>
@@ -270,9 +252,9 @@ export default function ResultsDashboard({
       return {
         label: "Market Leader",
         colorBg: "bg-emerald-500",
-        colorText: "text-emerald-700",
-        colorBorder: "border-emerald-200",
-        colorLightBg: "bg-emerald-50",
+        colorText: "text-emerald-700 dark:text-emerald-400",
+        colorBorder: "border-emerald-200 dark:border-emerald-900/40",
+        colorLightBg: "bg-emerald-50 dark:bg-emerald-950/20",
         desc: "Operating significantly above the sector median. Highly optimized workflows, healthy margins, and efficient labour leverage.",
         emoji: "🟢"
       };
@@ -280,9 +262,9 @@ export default function ResultsDashboard({
       return {
         label: "Median Competitor",
         colorBg: "bg-amber-500",
-        colorText: "text-amber-700",
-        colorBorder: "border-amber-200",
-        colorLightBg: "bg-amber-50",
+        colorText: "text-amber-700 dark:text-amber-400",
+        colorBorder: "border-amber-200 dark:border-amber-900/40",
+        colorLightBg: "bg-amber-50 dark:bg-amber-950/20",
         desc: "Performing at par with typical sector operations. Solid foundation but substantial headroom exists to raise payroll leverage and digitize.",
         emoji: "🟡"
       };
@@ -290,9 +272,9 @@ export default function ResultsDashboard({
       return {
         label: "Underperforming",
         colorBg: "bg-rose-500",
-        colorText: "text-rose-700",
-        colorBorder: "border-rose-200",
-        colorLightBg: "bg-rose-50",
+        colorText: "text-rose-700 dark:text-rose-450",
+        colorBorder: "border-rose-200 dark:border-rose-900/40",
+        colorLightBg: "bg-rose-50 dark:bg-rose-950/20",
         desc: "Currently running below sector median. Urgent strategic adjustments are recommended to address labour output leakages or thin margins.",
         emoji: "🔴"
       };
@@ -303,8 +285,8 @@ export default function ResultsDashboard({
 
   // Setup comparative data for charts
   const revPerEmpData = [
-    { name: companyName || "SME Actual", value: scores.labourDetails.revenuePerEmployee, fill: "#0f172a" },
-    { name: `${sector} P25`, value: benchmarks.revenue_per_employee.p25, fill: "#cbd5e1" },
+    { name: companyName || "SME Actual", value: scores.labourDetails.revenuePerEmployee, fill: "#4f46e5" },
+    { name: `${sector} P25`, value: benchmarks.revenue_per_employee.p25, fill: "#94a3b8" },
     { name: `${sector} Median (P50)`, value: benchmarks.revenue_per_employee.p50, fill: "#64748b" },
     { name: `${sector} P75`, value: benchmarks.revenue_per_employee.p75, fill: "#334155" },
   ];
@@ -314,46 +296,41 @@ export default function ResultsDashboard({
     { name: "Operating Margin %", Actual: scores.financialDetails.operatingMargin, Median: benchmarks.operating_margin.p50 },
   ];
 
-  const currentRatioData = [
-    { name: "Current Ratio", value: scores.financialDetails.currentRatio, fill: "#0f172a" },
-    { name: "Target Ratio", value: 1.5, fill: "#64748b" },
-  ];
-
   return (
-    <div id="results-dashboard-root" className="space-y-8 max-w-5xl mx-auto">
+    <div id="results-dashboard-root" className="space-y-8 max-w-5xl mx-auto pb-12">
       {/* Header Actions */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-6 border-b border-zinc-200 dark:border-zinc-800">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-6 border-b border-zinc-200 dark:border-zinc-800">
         <div>
           <button
             onClick={onBack}
-            className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-350 flex items-center gap-1.5 transition-colors cursor-pointer mb-2 uppercase tracking-wider"
+            className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 flex items-center gap-1.5 transition-colors cursor-pointer mb-2 uppercase tracking-wider"
           >
             ← Back to Assessment Dashboard
           </button>
-          <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-display font-bold text-zinc-900 dark:text-white truncate">
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-2xl md:text-3xl font-display font-bold text-zinc-900 dark:text-white tracking-tight">
               {companyName}
             </h1>
-            <span className="px-2.5 py-1 rounded-full text-2xs font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 border border-indigo-150 dark:border-indigo-900/50">
+            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 border border-indigo-150/40 dark:border-indigo-900/30">
               {sector} Sector
             </span>
           </div>
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-400 dark:text-zinc-550 mt-1">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-450 dark:text-zinc-500 mt-1.5 font-medium">
             <span className="flex items-center gap-1">
-              <Calendar className="w-3.5 h-3.5" />
+              <Calendar className="w-3.5 h-3.5 text-zinc-400" />
               {new Date(date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
             </span>
             <span>•</span>
             <span className="flex items-center gap-1">
-              <FileText className="w-3.5 h-3.5" />
+              <FileText className="w-3.5 h-3.5 text-zinc-400" />
               {fileName} ({fileType})
             </span>
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full md:w-auto">
           {exportError && (
-            <span className="text-2xs text-rose-650 dark:text-rose-400 font-bold bg-rose-50 dark:bg-rose-950/20 px-3 py-1.5 rounded-lg border border-rose-100 dark:border-rose-900/50 max-w-xs truncate">
+            <span className="text-[10px] text-rose-700 dark:text-rose-400 font-bold bg-rose-50 dark:bg-rose-950/20 px-3 py-1.5 rounded-lg border border-rose-100 dark:border-rose-900/40 max-w-xs truncate">
               ⚠️ {exportError}
             </span>
           )}
@@ -363,7 +340,7 @@ export default function ResultsDashboard({
               href={docUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md shadow-emerald-100 dark:shadow-none"
+              className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-750 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm hover:shadow-md"
             >
               <ExternalLink className="w-4 h-4" />
               Open Google Doc ↗
@@ -371,7 +348,7 @@ export default function ResultsDashboard({
           ) : !googleAccessToken ? (
             <button
               onClick={signInWithGoogle}
-              className="px-4 py-2 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-950/60 text-indigo-700 dark:text-indigo-450 border border-indigo-200 dark:border-indigo-850 hover:border-indigo-300 dark:hover:border-indigo-750 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+              className="px-4 py-2.5 bg-indigo-50 dark:bg-indigo-950/35 hover:bg-indigo-100 dark:hover:bg-indigo-950/50 text-indigo-700 dark:text-indigo-400 border border-indigo-200/50 dark:border-indigo-900/30 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
             >
               <FileText className="w-4 h-4" />
               Authorize Google Docs
@@ -380,7 +357,7 @@ export default function ResultsDashboard({
             <button
               onClick={handleExportGoogleDoc}
               disabled={isExporting}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer disabled:bg-zinc-150 dark:disabled:bg-zinc-850 disabled:text-zinc-400 dark:disabled:text-zinc-600"
+              className="px-4 py-2.5 bg-indigo-650 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer disabled:bg-zinc-100 dark:disabled:bg-zinc-800 disabled:text-zinc-400 dark:disabled:text-zinc-650"
             >
               {isExporting ? (
                 <>
@@ -398,7 +375,7 @@ export default function ResultsDashboard({
 
           <button
             onClick={() => generateAssessmentPDF(assessment)}
-            className="px-4 py-2 bg-zinc-900 dark:bg-zinc-850 hover:bg-zinc-800 dark:hover:bg-zinc-750 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md shadow-zinc-200/50 dark:shadow-none border border-transparent dark:border-zinc-700"
+            className="px-4 py-2.5 bg-zinc-900 dark:bg-zinc-800 hover:bg-zinc-800 dark:hover:bg-zinc-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer border border-transparent dark:border-zinc-700 shadow-sm"
           >
             <Download className="w-4 h-4" />
             Download PDF Report
@@ -411,10 +388,9 @@ export default function ResultsDashboard({
                   onDelete(assessment.id);
                 }
               }}
-              className="px-4 py-2 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 border border-rose-200 dark:border-rose-900/40 hover:border-rose-300 dark:hover:border-rose-800 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+              className="px-4 py-2.5 text-rose-600 dark:text-rose-450 hover:bg-rose-50 dark:hover:bg-rose-950/20 border border-rose-200/80 dark:border-rose-900/30 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
             >
               <Trash2 className="w-4 h-4" />
-              Delete Record
             </button>
           )}
         </div>
@@ -423,50 +399,53 @@ export default function ResultsDashboard({
       {/* Main Stats Bento Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Core Productivity Index Card (High Contrast Dark Bento block) */}
-        <div className="md:col-span-2 bg-zinc-900 dark:bg-zinc-900/80 border border-transparent dark:border-zinc-800 text-white rounded-[2rem] p-8 shadow-2xl shadow-zinc-200/5 dark:shadow-none relative overflow-hidden flex flex-col justify-between min-h-[220px]">
+        <div className="md:col-span-2 bg-zinc-900 dark:bg-zinc-950 border border-zinc-850 text-white rounded-[2rem] p-8 shadow-xl relative overflow-hidden flex flex-col justify-between min-h-[240px]">
           {/* Subtle background glow */}
-          <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500 rounded-full blur-[80px] opacity-25 -mr-16 -mt-16"></div>
+          <div className="absolute top-0 right-0 w-72 h-72 bg-indigo-500 rounded-full blur-[90px] opacity-[0.18] -mr-16 -mt-16 pointer-events-none"></div>
           
-          <div className="relative z-10">
-            <span className="text-xs font-bold uppercase tracking-widest text-indigo-400">
-              Composite Benchmark Index
-            </span>
-            <div className="flex items-baseline gap-4 mt-3">
-              <h1 className="text-6xl font-display font-black tracking-tight">
-                {scores.productivityIndex}
-                <span className="text-xl text-zinc-500 dark:text-zinc-400 font-light ml-1">/100</span>
-              </h1>
-              <span className="px-3 py-1 rounded-full text-xs font-bold bg-indigo-600 text-white shadow-lg shadow-indigo-900/30">
-                {status.label}
+          <div className="relative z-10 space-y-4">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-indigo-400" />
+              <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-400">
+                Composite Benchmark Index
               </span>
             </div>
-            <p className="text-zinc-300 text-sm mt-4 leading-relaxed max-w-xl">
+            <div className="flex items-baseline gap-4 mt-2">
+              <h1 className="text-5xl md:text-6xl font-display font-black tracking-tight text-white leading-none">
+                {scores.productivityIndex}
+                <span className="text-lg text-zinc-500 font-light ml-1">/100</span>
+              </h1>
+              <span className={`px-3 py-1 rounded-full text-xs font-bold border ${status.colorBorder} ${status.colorLightBg} ${status.colorText}`}>
+                {status.emoji} {status.label}
+              </span>
+            </div>
+            <p className="text-zinc-350 text-xs md:text-sm leading-relaxed max-w-xl font-medium">
               {status.desc}
             </p>
           </div>
 
-          <div className="relative z-10 pt-6 border-t border-zinc-800 flex justify-between items-center text-3xs font-mono text-zinc-500">
+          <div className="relative z-10 pt-6 border-t border-zinc-800/80 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-[10px] font-mono text-zinc-500 uppercase tracking-wider mt-4">
             <span>Formula: Avg(Labour Efficiency, Financial Health)</span>
-            <span>Ref: Vantly Analytics Framework</span>
+            <span>Ref: Vantly SME Analytics Framework</span>
           </div>
         </div>
 
         {/* Pillar Breakdown Stats Card (White Bento block with custom shadows) */}
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-[2rem] p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex flex-col justify-between transition-colors duration-300">
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-[2rem] p-8 shadow-sm flex flex-col justify-between transition-colors duration-300">
           <div>
-            <span className="text-xs font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
               Pillar Breakouts
             </span>
-            <div className="space-y-5 mt-5">
+            <div className="space-y-6 mt-5">
               <div>
                 <div className="flex justify-between text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1.5">
-                  <span className="flex items-center gap-1.5 uppercase font-display">
-                    <Users className="w-3.5 h-3.5 text-zinc-400" />
+                  <span className="flex items-center gap-1.5 uppercase tracking-wider text-[10px]">
+                    <Users className="w-3.5 h-3.5 text-indigo-500" />
                     Labour Efficiency
                   </span>
-                  <span className="font-mono text-zinc-900 dark:text-white">{scores.labourEfficiencyScore}/50</span>
+                  <span className="font-mono text-zinc-900 dark:text-white font-extrabold">{scores.labourEfficiencyScore}/50</span>
                 </div>
-                <div className="w-full bg-zinc-100 dark:bg-zinc-850 h-2.5 rounded-full overflow-hidden">
+                <div className="w-full bg-zinc-100 dark:bg-zinc-800 h-2.5 rounded-full overflow-hidden">
                   <div 
                     className="bg-indigo-600 h-full rounded-full transition-all duration-500"
                     style={{ width: `${(scores.labourEfficiencyScore / 50) * 100}%` }}
@@ -476,13 +455,13 @@ export default function ResultsDashboard({
 
               <div>
                 <div className="flex justify-between text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1.5">
-                  <span className="flex items-center gap-1.5 uppercase font-display">
-                    <DollarSign className="w-3.5 h-3.5 text-zinc-400" />
+                  <span className="flex items-center gap-1.5 uppercase tracking-wider text-[10px]">
+                    <DollarSign className="w-3.5 h-3.5 text-indigo-500" />
                     Financial Health
                   </span>
-                  <span className="font-mono text-zinc-900 dark:text-white">{scores.financialHealthScore}/50</span>
+                  <span className="font-mono text-zinc-900 dark:text-white font-extrabold">{scores.financialHealthScore}/50</span>
                 </div>
-                <div className="w-full bg-zinc-100 dark:bg-zinc-850 h-2.5 rounded-full overflow-hidden">
+                <div className="w-full bg-zinc-100 dark:bg-zinc-800 h-2.5 rounded-full overflow-hidden">
                   <div 
                     className="bg-indigo-600 h-full rounded-full transition-all duration-500"
                     style={{ width: `${(scores.financialHealthScore / 50) * 100}%` }}
@@ -492,35 +471,36 @@ export default function ResultsDashboard({
 
               <div>
                 <div className="flex justify-between text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1.5">
-                  <span className="flex items-center gap-1.5 uppercase font-display">
+                  <span className="flex items-center gap-1.5 uppercase tracking-wider text-[10px]">
                     <Cpu className="w-3.5 h-3.5 text-zinc-400" />
                     Digital Maturity
                   </span>
-                  <span className="font-mono text-zinc-900 dark:text-white">{scores.digitalMaturityScore}/100</span>
+                  <span className="font-mono text-zinc-900 dark:text-white font-extrabold">{scores.digitalMaturityScore}/100</span>
                 </div>
-                <div className="w-full bg-zinc-100 dark:bg-zinc-850 h-2.5 rounded-full overflow-hidden">
+                <div className="w-full bg-zinc-100 dark:bg-zinc-800 h-2.5 rounded-full overflow-hidden">
                   <div 
-                    className="bg-zinc-900 dark:bg-zinc-700 h-full rounded-full transition-all duration-500"
+                    className="bg-zinc-900 dark:bg-zinc-750 h-full rounded-full transition-all duration-500"
                     style={{ width: `${scores.digitalMaturityScore}%` }}
                   ></div>
                 </div>
               </div>
             </div>
           </div>
-          <div className="text-4xs font-semibold uppercase text-zinc-400 dark:text-zinc-500 border-t border-zinc-100 dark:border-zinc-800 pt-3 mt-4">
-            *Diagnostic metric • separated from core financial score
+          <div className="text-[9px] font-semibold uppercase text-zinc-400 dark:text-zinc-500 border-t border-zinc-100 dark:border-zinc-800 pt-3 mt-5">
+            *Diagnostic metric • separated from core index
           </div>
         </div>
       </div>
 
-      {/* Tabs Navigation (Pills/Bento Capsules) */}
-      <div className="flex border-b border-zinc-200 dark:border-zinc-800 overflow-x-auto pb-1 gap-2 scrollbar-none">
+      {/* Segmented Control Switcher Tabs */}
+      <div className="bg-zinc-100 dark:bg-zinc-950 p-1.5 rounded-2xl flex border border-zinc-200/50 dark:border-zinc-900 overflow-x-auto gap-1 scrollbar-none">
         {[
-          { id: "overview", label: "AI Recommendations", icon: Lightbulb },
+          { id: "overview", label: "AI Overview", icon: Lightbulb },
           { id: "labour", label: "Labour Efficiency", icon: Users },
           { id: "financial", label: "Financial Health", icon: DollarSign },
           { id: "digital", label: "Digitalization", icon: Cpu },
-          { id: "justification", label: "Audit Justification", icon: FileText },
+          { id: "justification", label: "Audit Traceability", icon: FileText },
+          { id: "rag", label: "Python RAG Q&A", icon: Sparkles },
         ].map((tab) => {
           const Icon = tab.icon;
           const isSelected = activeTab === tab.id;
@@ -528,13 +508,13 @@ export default function ResultsDashboard({
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
-              className={`px-4 py-2.5 border-b-2 font-bold text-xs flex items-center gap-2 shrink-0 transition-all cursor-pointer ${
+              className={`flex-1 min-w-[120px] px-3 py-2.5 rounded-xl font-bold text-2xs md:text-xs flex items-center justify-center gap-2 shrink-0 transition-all cursor-pointer ${
                 isSelected
-                  ? "border-indigo-600 text-indigo-600 dark:text-indigo-450 bg-indigo-50/10 dark:bg-indigo-950/20 rounded-t-xl"
-                  : "border-transparent text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-350"
+                  ? "bg-white dark:bg-zinc-900 text-indigo-650 dark:text-indigo-400 shadow-xs border border-zinc-200/30 dark:border-zinc-800/40"
+                  : "text-zinc-500 dark:text-zinc-450 hover:text-zinc-800 dark:hover:text-zinc-250 hover:bg-zinc-200/50 dark:hover:bg-zinc-900/30"
               }`}
             >
-              <Icon className="w-4 h-4" />
+              <Icon className={`w-3.5 h-3.5 ${isSelected ? "text-indigo-600 dark:text-indigo-400" : "text-zinc-400"}`} />
               {tab.label}
             </button>
           );
@@ -542,31 +522,60 @@ export default function ResultsDashboard({
       </div>
 
       {/* Tab Panels with animations */}
-      <div id="results-tab-panel" className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-[2rem] p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] min-h-[350px] transition-colors duration-300">
+      <div id="results-tab-panel" className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-[2rem] p-8 shadow-sm transition-colors duration-300">
         {activeTab === "overview" && (
-          <div className="space-y-6">
-            <div>
-              <span className="text-xs font-bold uppercase tracking-widest text-indigo-600 dark:text-indigo-400">Cognitive Synthesis</span>
-              <h3 className="text-xl font-display font-bold text-zinc-900 dark:text-white mt-1 mb-3">
+          <div className="space-y-8">
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-indigo-500" />
+                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">Cognitive Synthesis</span>
+              </div>
+              <h3 className="text-xl font-display font-bold text-zinc-900 dark:text-white tracking-tight">
                 Qualitative SME Performance Analysis
               </h3>
-              <p className="text-zinc-600 dark:text-zinc-300 text-sm leading-relaxed whitespace-pre-line bg-zinc-50/70 p-5 rounded-2xl border border-zinc-150 dark:border-zinc-800">
+              <p className="text-zinc-650 dark:text-zinc-350 text-xs md:text-sm leading-relaxed whitespace-pre-line bg-zinc-50/50 dark:bg-zinc-950/40 p-6 rounded-2xl border border-zinc-150 dark:border-zinc-850 font-medium">
                 {scores.qualitativeAnalysis}
               </p>
             </div>
 
-            <div className="pt-4">
-              <h3 className="text-xl font-display font-bold text-zinc-900 dark:text-white mb-4 flex items-center gap-2">
+            {/* SME Vital Health Cards Layout */}
+            <div className="space-y-4 pt-4 border-t border-zinc-100 dark:border-zinc-800">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                SME Vital Account Indicators
+              </span>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="p-4 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200/60 dark:border-zinc-850 rounded-2xl">
+                  <span className="text-[10px] font-bold text-zinc-400 dark:text-zinc-550 uppercase">Annual Revenue</span>
+                  <span className="block font-mono text-xs md:text-sm font-extrabold text-zinc-900 dark:text-zinc-100 mt-1">{formatCurrency(metrics.revenue)}</span>
+                </div>
+                <div className="p-4 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200/60 dark:border-zinc-850 rounded-2xl">
+                  <span className="text-[10px] font-bold text-zinc-400 dark:text-zinc-550 uppercase">Average Headcount</span>
+                  <span className="block font-mono text-xs md:text-sm font-extrabold text-zinc-900 dark:text-zinc-100 mt-1">{metrics.headcount !== null ? `${metrics.headcount} Staff` : "N/A"}</span>
+                </div>
+                <div className="p-4 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200/60 dark:border-zinc-850 rounded-2xl">
+                  <span className="text-[10px] font-bold text-zinc-400 dark:text-zinc-550 uppercase">Total Payroll</span>
+                  <span className="block font-mono text-xs md:text-sm font-extrabold text-zinc-900 dark:text-zinc-100 mt-1">{formatCurrency(metrics.payroll)}</span>
+                </div>
+                <div className="p-4 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200/60 dark:border-zinc-850 rounded-2xl">
+                  <span className="text-[10px] font-bold text-zinc-400 dark:text-zinc-550 uppercase">Gross Profit Margin</span>
+                  <span className="block font-mono text-xs md:text-sm font-extrabold text-zinc-900 dark:text-zinc-100 mt-1">{scores.financialDetails.grossMargin}%</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Recommendations Section */}
+            <div className="pt-6 border-t border-zinc-100 dark:border-zinc-800">
+              <h3 className="text-lg font-display font-bold text-zinc-900 dark:text-white mb-5 flex items-center gap-2 tracking-tight">
                 <Lightbulb className="w-5 h-5 text-amber-500" />
-                Actionable AI-Powered SME Recommendations
+                Actionable Strategic SME Recommendations
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {scores.recommendations.map((rec, idx) => (
-                  <div key={idx} className="p-5 rounded-2xl border border-zinc-150 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:border-indigo-500/30 hover:shadow-sm transition-all flex gap-3">
-                    <div className="w-6 h-6 rounded-full bg-indigo-50 dark:bg-indigo-950 shrink-0 text-indigo-600 dark:text-indigo-450 flex items-center justify-center font-bold text-xs">
+                  <div key={idx} className="p-5 rounded-2xl border border-zinc-150 dark:border-zinc-850 bg-white dark:bg-zinc-950 hover:border-indigo-500/25 shadow-2xs hover:shadow-sm transition-all flex gap-3.5 group">
+                    <div className="w-6 h-6 rounded-full bg-indigo-50 dark:bg-indigo-950 shrink-0 text-indigo-650 dark:text-indigo-400 flex items-center justify-center font-bold text-xs group-hover:scale-105 transition-transform">
                       {idx + 1}
                     </div>
-                    <p className="text-zinc-600 dark:text-zinc-350 text-xs leading-relaxed font-medium">
+                    <p className="text-zinc-600 dark:text-zinc-350 text-xs leading-relaxed font-semibold">
                       {rec}
                     </p>
                   </div>
@@ -578,33 +587,33 @@ export default function ResultsDashboard({
 
         {activeTab === "labour" && (
           <div className="space-y-8">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
-              <div>
-                <span className="text-xs font-bold uppercase tracking-widest text-indigo-600 dark:text-indigo-400">Pillar 1 Analysis</span>
-                <h3 className="text-xl font-display font-bold text-zinc-900 dark:text-white mt-1 mb-2">
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 items-center">
+              <div className="lg:col-span-2 space-y-4">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-650 dark:text-indigo-400">Pillar 1 Analysis</span>
+                <h3 className="text-xl font-display font-bold text-zinc-900 dark:text-white tracking-tight">
                   Labour Efficiency Analysis
                 </h3>
-                <p className="text-zinc-500 dark:text-zinc-400 text-sm leading-relaxed mb-6 font-medium">
-                  Labour efficiency measures the financial leverage generated from payroll capital and headcount deployment. Operating at a high value represents maximum task automation and product value-add per employee.
+                <p className="text-zinc-500 dark:text-zinc-400 text-xs md:text-sm leading-relaxed font-medium">
+                  Labour efficiency evaluates the leverage generated from personnel capital. High efficiency signifies streamlined processes, task automation, and maximum output per employee.
                 </p>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="p-5 bg-zinc-50 dark:bg-zinc-950 rounded-2xl border border-zinc-150 dark:border-zinc-800">
-                    <span className="text-4xs text-zinc-400 dark:text-zinc-500 font-bold block uppercase tracking-wider">Revenue per Employee</span>
-                    <span className="text-2xl font-black text-zinc-900 dark:text-white block mt-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                  <div className="p-5 bg-zinc-50 dark:bg-zinc-950 rounded-2xl border border-zinc-150 dark:border-zinc-850">
+                    <span className="text-[10px] font-bold text-zinc-400 dark:text-zinc-550 block uppercase tracking-wider">Revenue / Employee</span>
+                    <span className="text-xl md:text-2xl font-black text-zinc-900 dark:text-white block mt-1 font-mono">
                       {scores.labourDetails.revenuePerEmployee > 0 ? formatCurrency(scores.labourDetails.revenuePerEmployee) : "N/A"}
                     </span>
-                    <span className="text-3xs font-semibold text-zinc-400 dark:text-zinc-500 block mt-1 uppercase">
+                    <span className="text-[10px] font-bold text-zinc-450 dark:text-zinc-500 block mt-1 uppercase leading-none">
                       Sector Median: {formatCurrency(scores.labourDetails.revenuePerEmployeeBenchmark)}
                     </span>
                   </div>
 
-                  <div className="p-5 bg-zinc-50 dark:bg-zinc-950 rounded-2xl border border-zinc-150 dark:border-zinc-800">
-                    <span className="text-4xs text-zinc-400 dark:text-zinc-500 font-bold block uppercase tracking-wider">Output per Payroll £</span>
-                    <span className="text-2xl font-black text-zinc-900 dark:text-white block mt-1">
+                  <div className="p-5 bg-zinc-50 dark:bg-zinc-950 rounded-2xl border border-zinc-150 dark:border-zinc-850">
+                    <span className="text-[10px] font-bold text-zinc-400 dark:text-zinc-550 block uppercase tracking-wider">Output / Payroll £</span>
+                    <span className="text-xl md:text-2xl font-black text-zinc-900 dark:text-white block mt-1 font-mono">
                       {scores.labourDetails.outputPerPayroll > 0 ? `£${scores.labourDetails.outputPerPayroll}` : "N/A"}
                     </span>
-                    <span className="text-3xs font-semibold text-zinc-400 dark:text-zinc-500 block mt-1 uppercase">
+                    <span className="text-[10px] font-bold text-zinc-450 dark:text-zinc-500 block mt-1 uppercase leading-none">
                       Sector Median: £{scores.labourDetails.outputPerPayrollBenchmark}
                     </span>
                   </div>
@@ -612,18 +621,18 @@ export default function ResultsDashboard({
               </div>
 
               {/* Chart Visualizing Rev per Emp */}
-              <div className="bg-zinc-50/50 dark:bg-zinc-950/40 p-6 rounded-2xl border border-zinc-150 dark:border-zinc-800 shadow-3xs">
-                <h4 className="text-xs font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest mb-6 text-center">
+              <div className="lg:col-span-3 bg-zinc-50/50 dark:bg-zinc-950/40 p-6 rounded-2xl border border-zinc-150 dark:border-zinc-850 shadow-3xs">
+                <h4 className="text-[11px] font-bold text-zinc-450 dark:text-zinc-500 uppercase tracking-wider mb-6 text-center">
                   Revenue per Employee Benchmark comparison
                 </h4>
                 <div className="h-56 w-full">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={revPerEmpData} margin={{ top: 10, right: 10, left: 10, bottom: 20 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e4e4e7" />
-                      <XAxis dataKey="name" tick={{ fontSize: 9, fill: "#71717a" }} interval={0} angle={-15} textAnchor="end" />
-                      <YAxis tickFormatter={(val) => `£${val / 1000}k`} tick={{ fontSize: 10, fill: "#71717a" }} />
-                      <Tooltip formatter={(value) => [`£${Number(value).toLocaleString()}`, "Revenue per Employee"]} />
-                      <Bar dataKey="value">
+                    <BarChart data={revPerEmpData} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
+                      <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#f1f5f9" />
+                      <XAxis dataKey="name" tick={{ fontSize: 9, fill: "#888888", fontWeight: 600 }} interval={0} stroke="#e4e4e7" />
+                      <YAxis tickFormatter={(val) => `£${val / 1000}k`} tick={{ fontSize: 10, fill: "#888888" }} stroke="#e4e4e7" />
+                      <Tooltip content={<CustomTooltip formatter={(value: any) => `£${Number(value).toLocaleString()}`} />} />
+                      <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={45}>
                         {revPerEmpData.map((entry, index) => {
                           const isActual = entry.name === (companyName || "SME Actual");
                           return <Cell key={`cell-${index}`} fill={isActual ? "#4f46e5" : "#18181b"} />;
@@ -639,67 +648,67 @@ export default function ResultsDashboard({
 
         {activeTab === "financial" && (
           <div className="space-y-8">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
-              <div>
-                <span className="text-xs font-bold uppercase tracking-widest text-indigo-600 dark:text-indigo-400">Pillar 2 Analysis</span>
-                <h3 className="text-xl font-display font-bold text-zinc-900 dark:text-white mt-1 mb-2">
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 items-center">
+              <div className="lg:col-span-2 space-y-4">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-650 dark:text-indigo-400">Pillar 2 Analysis</span>
+                <h3 className="text-xl font-display font-bold text-zinc-900 dark:text-white tracking-tight">
                   Financial Health & Liquidity breakout
                 </h3>
-                <p className="text-zinc-500 dark:text-zinc-400 text-sm leading-relaxed mb-6 font-medium">
-                  While productivity indices measure throughput, financial health determines viability, margins, and defensive liquidity reserves. True SME health balances high gross margins with robust working capital coverage.
+                <p className="text-zinc-500 dark:text-zinc-400 text-xs md:text-sm leading-relaxed font-medium">
+                  While productivity indices track volume, financial health ensures solvency. True corporate resilience balances high margins with deep current liquidity cushions.
                 </p>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="p-5 bg-zinc-50 dark:bg-zinc-950 rounded-2xl border border-zinc-150 dark:border-zinc-800">
-                    <span className="text-4xs text-zinc-400 dark:text-zinc-500 font-bold block uppercase tracking-wider">Gross Margin %</span>
-                    <span className="text-2xl font-black text-zinc-900 dark:text-white block mt-1">
+                  <div className="p-5 bg-zinc-50 dark:bg-zinc-950 rounded-2xl border border-zinc-150 dark:border-zinc-850">
+                    <span className="text-[10px] font-bold text-zinc-400 dark:text-zinc-550 block uppercase tracking-wider">Gross Margin %</span>
+                    <span className="text-xl md:text-2xl font-black text-zinc-900 dark:text-white block mt-1 font-mono">
                       {scores.financialDetails.grossMargin}%
                     </span>
-                    <span className="text-3xs font-semibold text-zinc-400 dark:text-zinc-500 block mt-1 uppercase">
+                    <span className="text-[10px] font-bold text-zinc-450 dark:text-zinc-500 block mt-1 uppercase leading-none">
                       Sector Median: {scores.financialDetails.grossMarginBenchmark}%
                     </span>
                   </div>
 
-                  <div className="p-5 bg-zinc-50 dark:bg-zinc-955 rounded-2xl border border-zinc-150 dark:border-zinc-800">
-                    <span className="text-4xs text-zinc-400 dark:text-zinc-500 font-bold block uppercase tracking-wider">Operating Margin %</span>
-                    <span className="text-2xl font-black text-zinc-900 dark:text-white block mt-1">
+                  <div className="p-5 bg-zinc-50 dark:bg-zinc-950 rounded-2xl border border-zinc-150 dark:border-zinc-850">
+                    <span className="text-[10px] font-bold text-zinc-400 dark:text-zinc-550 block uppercase tracking-wider">Operating Margin %</span>
+                    <span className="text-xl md:text-2xl font-black text-zinc-900 dark:text-white block mt-1 font-mono">
                       {scores.financialDetails.operatingMargin}%
                     </span>
-                    <span className="text-3xs font-semibold text-zinc-400 dark:text-zinc-500 block mt-1 uppercase">
+                    <span className="text-[10px] font-bold text-zinc-450 dark:text-zinc-500 block mt-1 uppercase leading-none">
                       Sector Median: {scores.financialDetails.operatingMarginBenchmark}%
                     </span>
                   </div>
 
-                  <div className="p-5 bg-zinc-50 dark:bg-zinc-950 rounded-2xl border border-zinc-150 dark:border-zinc-800 sm:col-span-2">
-                    <span className="text-4xs text-zinc-400 dark:text-zinc-500 font-bold block uppercase tracking-wider">Liquidity (Current Ratio)</span>
-                    <span className="text-2xl font-black text-zinc-900 dark:text-white block mt-1">
+                  <div className="p-5 bg-zinc-50 dark:bg-zinc-950 rounded-2xl border border-zinc-150 dark:border-zinc-850 sm:col-span-2">
+                    <span className="text-[10px] font-bold text-zinc-400 dark:text-zinc-550 block uppercase tracking-wider">Liquidity (Current Ratio)</span>
+                    <span className="text-xl md:text-2xl font-black text-zinc-900 dark:text-white block mt-1 font-mono">
                       {scores.financialDetails.currentRatio}x
                     </span>
-                    <p className="text-2xs font-semibold mt-1 text-zinc-700 dark:text-zinc-300">
+                    <p className="text-[11px] font-bold mt-2 leading-tight">
                       {scores.financialDetails.currentRatio >= 1.5 
-                        ? "🟢 Healthy working capital runway (Ratio > 1.5)" 
+                        ? "🟢 Healthy capital runway (Ratio >= 1.5)" 
                         : scores.financialDetails.currentRatio >= 1.0 
-                        ? "🟡 Marginal cash flow runway. Cash flow matches obligations closely." 
-                        : "🔴 Risk of working capital squeeze. Liquidity ratio is below 1.0."}
+                        ? "🟡 Marginal flow. Short-term obligations match assets closely." 
+                        : "🔴 Squeeze risk. Cash flow assets are below short liabilities."}
                     </p>
                   </div>
                 </div>
               </div>
 
               {/* Comparative margins */}
-              <div className="bg-zinc-50/50 dark:bg-zinc-955/40 p-6 rounded-2xl border border-zinc-150 dark:border-zinc-800 shadow-3xs">
-                <h4 className="text-xs font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest mb-6 text-center">
+              <div className="lg:col-span-3 bg-zinc-50/50 dark:bg-zinc-950/40 p-6 rounded-2xl border border-zinc-150 dark:border-zinc-850 shadow-3xs">
+                <h4 className="text-[11px] font-bold text-zinc-450 dark:text-zinc-500 uppercase tracking-wider mb-6 text-center">
                   Margin Benchmark Comparison (%)
                 </h4>
                 <div className="h-56 w-full">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={marginData} margin={{ top: 10, right: 10, left: 10, bottom: 20 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e4e4e7" />
-                      <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#71717a" }} />
-                      <YAxis tickFormatter={(val) => `${val}%`} tick={{ fontSize: 10, fill: "#71717a" }} />
-                      <Tooltip formatter={(value) => [`${value}%`]} />
-                      <Bar dataKey="Actual" fill="#4f46e5" name="Actual Performance" />
-                      <Bar dataKey="Median" fill="#18181b" name="Sector Median" />
+                    <BarChart data={marginData} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
+                      <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#f1f5f9" />
+                      <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#888888", fontWeight: 600 }} stroke="#e4e4e7" />
+                      <YAxis tickFormatter={(val) => `${val}%`} tick={{ fontSize: 10, fill: "#888888" }} stroke="#e4e4e7" />
+                      <Tooltip content={<CustomTooltip formatter={(value: any) => `${value}%`} />} />
+                      <Bar dataKey="Actual" fill="#4f46e5" radius={[6, 6, 0, 0]} maxBarSize={45} name="Actual Performance" />
+                      <Bar dataKey="Median" fill="#18181b" radius={[6, 6, 0, 0]} maxBarSize={45} name="Sector Median" />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -711,56 +720,56 @@ export default function ResultsDashboard({
         {activeTab === "digital" && (
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="p-6 bg-zinc-50 dark:bg-zinc-950/50 rounded-2xl border border-zinc-150 dark:border-zinc-800 flex flex-col justify-between">
+              <div className="p-6 bg-zinc-50 dark:bg-zinc-950 rounded-2xl border border-zinc-150 dark:border-zinc-850 flex flex-col justify-between">
                 <div>
-                  <h4 className="text-xs font-bold text-zinc-450 dark:text-zinc-500 uppercase tracking-wider mb-1">Digital Maturity Level</h4>
-                  <p className="text-zinc-500 dark:text-zinc-400 text-xs leading-relaxed mb-4">
-                    Determined based on structural signals of process digitalization, modern cloud general ledger accounting packages, and process automation tools detected inside the report.
+                  <h4 className="text-xs font-bold text-zinc-450 dark:text-zinc-550 uppercase tracking-wider mb-2">Digital Maturity Diagnosis</h4>
+                  <p className="text-zinc-500 dark:text-zinc-400 text-xs leading-relaxed mb-4 font-medium">
+                    Evaluated by looking at mentions of software systems, cloud accounting tools, automated general ledgers, or payment pipelines mentioned in statements.
                   </p>
                   
-                  <div className="flex items-center gap-3 mt-4">
-                    <span className="text-4xl">
+                  <div className="flex items-center gap-3 mt-4 bg-white dark:bg-zinc-900 p-4 rounded-xl border border-zinc-150 dark:border-zinc-800">
+                    <span className="text-3xl">
                       {scores.digitalMaturityLevel === "High" ? "⚡" : scores.digitalMaturityLevel === "Medium" ? "⚙️" : "📁"}
                     </span>
                     <div>
-                      <span className="block font-bold text-zinc-900 dark:text-white text-lg">{scores.digitalMaturityLevel} Maturity</span>
-                      <span className="text-2xs text-zinc-400 dark:text-zinc-500 font-semibold">Diag Score: {scores.digitalMaturityScore}/100</span>
+                      <span className="block font-bold text-zinc-900 dark:text-white text-base">{scores.digitalMaturityLevel} Maturity Level</span>
+                      <span className="text-[10px] text-zinc-450 dark:text-zinc-500 font-bold font-mono uppercase">Diagnostic Score: {scores.digitalMaturityScore}/100</span>
                     </div>
                   </div>
                 </div>
 
                 <div className="border-t border-zinc-200 dark:border-zinc-800 pt-4 mt-6">
-                  <span className="text-4xs font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider block mb-2">Detected Tech Signals:</span>
-                  <div className="flex flex-wrap gap-1.5">
+                  <span className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider block mb-2">Detected Technology Signals:</span>
+                  <div className="flex flex-wrap gap-2">
                     {metrics.digitalTools.length > 0 ? (
                       metrics.digitalTools.map((tool, idx) => (
-                        <span key={idx} className="px-2.5 py-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-850 rounded-lg text-2xs font-semibold text-zinc-700 dark:text-zinc-300 shadow-3xs">
+                        <span key={idx} className="px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800/80 rounded-xl text-2xs font-bold text-zinc-700 dark:text-zinc-300 shadow-2xs">
                           🛠️ {tool}
                         </span>
                       ))
                     ) : (
-                      <span className="text-xs text-zinc-450 italic">No explicit bookkeeping/digital ERP system detected in statement.</span>
+                      <span className="text-xs text-zinc-450 italic font-semibold">No explicit software or ERP packages detected in report.</span>
                     )}
                   </div>
                 </div>
               </div>
 
-              <div className="p-6 bg-zinc-900 dark:bg-zinc-900/80 border border-transparent dark:border-zinc-800 text-white rounded-2xl relative overflow-hidden flex flex-col justify-between">
-                <div className="relative">
-                  <h4 className="text-xs font-bold text-indigo-400 uppercase tracking-wider mb-2">Modernizing Operations</h4>
-                  <p className="text-zinc-300 text-xs leading-relaxed">
-                    SMEs utilizing modern API-driven SaaS suites (such as Xero, QuickBooks, automated payroll) experience a 2.3x reduction in administrative overhead, dramatically raising their Labour Efficiency index.
+              <div className="p-6 bg-zinc-900 dark:bg-zinc-950 border border-zinc-800 text-white rounded-2xl flex flex-col justify-between">
+                <div>
+                  <h4 className="text-xs font-bold text-indigo-400 uppercase tracking-wider mb-2">Operational Leverage Pathways</h4>
+                  <p className="text-zinc-300 text-xs leading-relaxed font-medium">
+                    SMEs running robust cloud suites (e.g. Xero, Sage, CRM, connected bank APIs) typically experience up to 2.5x higher output per payroll than peers with paper or legacy Excel records.
                   </p>
                 </div>
 
-                <div className="relative pt-6 border-t border-zinc-800">
-                  <span className="text-2xs text-amber-400 font-bold block mb-1 uppercase tracking-wider">💡 Digital Maturity Recommendation:</span>
-                  <p className="text-zinc-300 text-xs leading-relaxed italic">
+                <div className="pt-6 border-t border-zinc-800/80 mt-6">
+                  <span className="text-[10px] text-amber-400 font-bold block mb-1.5 uppercase tracking-wider">💡 Automation Recommendation:</span>
+                  <p className="text-zinc-300 text-xs leading-relaxed italic font-medium">
                     {scores.digitalMaturityLevel === "Low" 
-                      ? "Migrate manual records to a cloud accounting platform (Xero/QuickBooks) with automated bank feeds to reduce admin leakages." 
+                      ? "Migrate core financial and payroll logs onto a unified cloud platform (Xero or QuickBooks) with active bank feeds to eradicate admin delays." 
                       : scores.digitalMaturityLevel === "Medium" 
-                      ? "Introduce connected OCR plugins (e.g. Dext, Hubdoc) to fully automate accounting journal entries and reduce invoice lag."
-                      : "Consider connecting CRM pipelines via automated webhooks to link inventory forecasting closely with sales pipelines."}
+                      ? "Incorporate OCR companion utilities (e.g., Hubdoc, Dext) to fully automate expense receipt entries and shorten invoicing feedback loops."
+                      : "Consider bridging client CRM pipelines via webhooks into general ledgers to sync inventory forecasting directly with sales trends."}
                   </p>
                 </div>
               </div>
@@ -770,22 +779,61 @@ export default function ResultsDashboard({
 
         {activeTab === "justification" && (
           <div className="space-y-6">
-            <div className="flex items-start gap-4 p-5 bg-zinc-50 dark:bg-zinc-950 border border-zinc-150 dark:border-zinc-800 rounded-2xl">
-              <FileText className="w-5 h-5 text-indigo-600 dark:text-indigo-450 shrink-0 mt-0.5" />
+            <div className="flex items-start gap-4 p-5 bg-zinc-50 dark:bg-zinc-950 border border-zinc-150 dark:border-zinc-850 rounded-2xl">
+              <FileText className="w-5 h-5 text-indigo-600 dark:text-indigo-400 shrink-0 mt-0.5" />
               <div>
                 <h4 className="text-sm font-bold text-zinc-900 dark:text-white">AI Audit & Document Traceability</h4>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed mt-0.5">
-                  To maintain the strict auditing transparency demanded in Vantly evaluations, Gemini tracks the audit traces of every single extracted financial field.
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed mt-0.5 font-medium">
+                  To assure strict audit traceability required in commercial reports, Gemini indexes the exact audit traces for each processed field.
                 </p>
               </div>
             </div>
 
-            <div className="border border-zinc-150 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-3xs">
-              <div className="grid grid-cols-2 bg-zinc-50 dark:bg-zinc-950 p-3.5 border-b border-zinc-150 dark:border-zinc-800 text-2xs font-bold text-zinc-450 dark:text-zinc-500 uppercase tracking-widest">
-                <span>extracted financial field</span>
+            {/* Anti-Hallucination & Verification Guard */}
+            <div className="p-6 bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/20 rounded-2xl space-y-4">
+              <div className="flex items-center gap-2.5">
+                <span className="p-1.5 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                  <ShieldAlert className="w-4 h-4" />
+                </span>
+                <div>
+                  <h4 className="text-xs font-bold text-zinc-900 dark:text-white">Anti-Hallucination & Verification Guard</h4>
+                  <p className="text-[10px] text-zinc-450 dark:text-zinc-500 font-bold uppercase tracking-wider">Passive Document Verification Protocol</p>
+                </div>
+              </div>
+              <p className="text-xs text-zinc-600 dark:text-zinc-350 leading-relaxed font-semibold">
+                To prevent artificial intelligence hallucinations, Vantly AI operates on a strict <strong className="text-indigo-600 dark:text-indigo-400 font-extrabold">Direct-Evidence constraint</strong>. If a financial metric is not explicitly stated in your uploaded accounts or mathematically derivable with absolute certainty, the system returns <code className="px-1 py-0.5 rounded bg-zinc-100 dark:bg-zinc-850 font-mono font-bold text-[10px]">null (N/A)</code> rather than guessing or interpolating.
+              </p>
+              
+              {/* Checkbox status checklist */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2">
+                {[
+                  { name: "Annual Gross Revenue", found: metrics.revenue !== null },
+                  { name: "Average Employee Headcount", found: metrics.headcount !== null },
+                  { name: "Cost of Goods Sold (COGS)", found: metrics.cogs !== null },
+                  { name: "Annual Wages & Payroll", found: metrics.payroll !== null },
+                  { name: "Balance Sheet Assets", found: metrics.currentAssets !== null },
+                  { name: "Balance Sheet Liabilities", found: metrics.currentLiabilities !== null },
+                ].map((m, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-3.5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-150 dark:border-zinc-850/80 shadow-2xs">
+                    <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300">{m.name}</span>
+                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                      m.found 
+                        ? "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/20" 
+                        : "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-450 border border-amber-100 dark:border-amber-900/20"
+                    }`}>
+                      {m.found ? "✓ Verified Source" : "∅ N/A (No Guessing)"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="border border-zinc-150 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-2xs">
+              <div className="grid grid-cols-2 bg-zinc-50 dark:bg-zinc-950 p-3.5 border-b border-zinc-150 dark:border-zinc-800 text-[10px] font-bold text-zinc-450 dark:text-zinc-500 uppercase tracking-wider">
+                <span>financial field</span>
                 <span>extracted value</span>
               </div>
-              <div className="divide-y divide-zinc-150 dark:divide-zinc-800 text-sm">
+              <div className="divide-y divide-zinc-100 dark:divide-zinc-850 text-sm">
                 {[
                   { label: "Annual Gross Revenue", value: formatCurrency(metrics.revenue) },
                   { label: "Reported Average Headcount", value: metrics.headcount !== null ? `${metrics.headcount} employees` : "N/A" },
@@ -796,25 +844,33 @@ export default function ResultsDashboard({
                   { label: "Balance Sheet Current Assets", value: formatCurrency(metrics.currentAssets) },
                   { label: "Balance Sheet Current Liabilities", value: formatCurrency(metrics.currentLiabilities) },
                 ].map((item, idx) => (
-                  <div key={idx} className="grid grid-cols-2 p-3.5 hover:bg-zinc-50/20 dark:hover:bg-zinc-950/20 transition-all">
+                  <div key={idx} className="grid grid-cols-2 p-3.5 hover:bg-zinc-50/20 dark:hover:bg-zinc-950/25 transition-all">
                     <span className="font-bold text-zinc-800 dark:text-zinc-300 text-xs">{item.label}</span>
-                    <span className="font-mono text-xs text-zinc-950 dark:text-white font-semibold">{item.value}</span>
+                    <span className="font-mono text-xs text-zinc-950 dark:text-white font-black">{item.value}</span>
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="p-5 bg-zinc-50 dark:bg-zinc-950 rounded-2xl border border-zinc-150 dark:border-zinc-800">
-              <span className="text-4xs font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest block mb-2">Audit Trace Log:</span>
-              <p className="text-xs text-zinc-600 dark:text-zinc-400 font-mono leading-relaxed whitespace-pre-wrap bg-white dark:bg-zinc-900 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800">
+            <div className="p-5 bg-zinc-50 dark:bg-zinc-950 rounded-2xl border border-zinc-150 dark:border-zinc-850">
+              <span className="text-[10px] font-bold text-zinc-400 dark:text-zinc-550 uppercase tracking-wider block mb-2">Audit Trace Log:</span>
+              <p className="text-xs text-zinc-650 dark:text-zinc-350 font-mono leading-relaxed whitespace-pre-wrap bg-white dark:bg-zinc-900/60 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 font-semibold shadow-2xs">
                 {metrics.extractedJustifications}
               </p>
-              <div className="flex items-center justify-between text-4xs font-semibold uppercase text-zinc-400 dark:text-zinc-500 mt-3">
+              <div className="flex items-center justify-between text-[10px] font-bold uppercase text-zinc-400 dark:text-zinc-550 mt-3.5">
                 <span>Extraction Engine: Google Gemini 3.5 Flash</span>
                 <span>Trace Confidence: {metrics.confidence}%</span>
               </div>
             </div>
           </div>
+        )}
+
+        {activeTab === "rag" && (
+          <RAGChat
+            docId={assessment.id}
+            companyName={companyName}
+            fileName={fileName}
+          />
         )}
       </div>
     </div>
