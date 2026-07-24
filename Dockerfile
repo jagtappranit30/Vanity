@@ -15,7 +15,7 @@ COPY package*.json ./
 COPY rag_service/requirements.txt ./rag_service/requirements.txt
 
 # Install Node dependencies
-RUN npm ci
+RUN npm install
 
 # Create Python virtual environment and install dependencies
 RUN python3 -m venv /app/rag_service/venv && \
