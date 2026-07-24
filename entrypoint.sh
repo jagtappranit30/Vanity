@@ -8,7 +8,7 @@ until nc -z -w 1 "$SQL_HOST" 5432; do
 done
 
 echo "Database is up! Running migrations..."
-npx drizzle-kit push
+npx drizzle-kit push --config=src/db/drizzle.config.ts
 
 echo "Starting Vantly application..."
 export NODE_ENV=production
