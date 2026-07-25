@@ -484,9 +484,9 @@ function resolveTaskLLM(task: "assessment" | "rag" | "strategy"): TaskLLMConfig 
   let model = process.env[`${taskEnvPrefix}_MODEL`];
   if (!model) {
     if (provider === "gemini") {
-      model = task === "assessment" ? "gemini-3.6-flash" : task === "rag" ? "gemini-3.6-flash" : "gemini-3.6-flash";
+      model = "gemini-3.6-flash";
     } else {
-      model = process.env.OLLAMA_MODEL || "llama3";
+      model = process.env.OLLAMA_MODEL || "gpt-oss";
     }
   }
 

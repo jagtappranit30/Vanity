@@ -16,7 +16,7 @@ class RAGEngine:
     def __init__(self):
         self.provider = os.environ.get("LLM_PROVIDER", "").lower()
         self.ollama_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
-        self.ollama_model = os.environ.get("OLLAMA_MODEL", "llama3")
+        self.ollama_model = os.environ.get("OLLAMA_MODEL", "gpt-oss")
 
         self.api_key = os.environ.get("GEMINI_API_KEY")
         if self.api_key:
@@ -195,7 +195,7 @@ class RAGEngine:
             if provider == "gemini":
                 model = "gemini-3.6-flash"
             else:
-                model = os.environ.get("OLLAMA_MODEL", "llama3")
+                model = os.environ.get("OLLAMA_MODEL", "gpt-oss")
 
         return provider, model, ollama_url, gemini_key
 
