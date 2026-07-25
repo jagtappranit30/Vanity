@@ -464,7 +464,7 @@ function resolveTaskLLM(task: "assessment" | "rag" | "strategy"): TaskLLMConfig 
   let model = process.env[`${taskEnvPrefix}_MODEL`];
   if (!model) {
     if (provider === "gemini") {
-      model = task === "assessment" ? "gemini-3.6-flash" : task === "rag" ? "gemini-2.5-flash" : "gemini-3.6-flash";
+      model = task === "assessment" ? "gemini-2.5-flash" : task === "rag" ? "gemini-2.5-flash" : "gemini-2.5-flash";
     } else {
       model = process.env.OLLAMA_MODEL || "llama3";
     }
@@ -525,7 +525,12 @@ Your task is to:
 You must return the result as a single JSON object matching the requested schema exactly.`;
 
     if (useOllama) {
-      const targetUrl = ollamaUrl || "http://localhost:11434";
+      let targetUrl = ollamaUrl || "http://localhost:11434";
+      // Translate localhost -> host.docker.internal when running inside Docker container
+      if (process.env.SQL_HOST === "db" && (targetUrl.includes("localhost") || targetUrl.includes("127.0.0.1"))) {
+        targetUrl = targetUrl.replace("localhost", "host.docker.internal").replace("127.0.0.1", "host.docker.internal");
+      }
+
       console.log(`[Ollama Request] Calling local offline Ollama model '${ollamaModel}' at ${targetUrl}...`);
       const docText = extractTextForOllama(file.buffer, isPDF);
 
@@ -552,17 +557,23 @@ You MUST return ONLY a JSON object (no markdown, no backticks, no codeblocks) wi
 `;
       const fullPrompt = `${promptText}\n\n${jsonFormatGuide}\n\nDOCUMENT TEXT CONTENT:\n${docText}`;
 
-      const ollamaRes = await fetch(`${targetUrl}/api/generate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: ollamaModel,
-          prompt: fullPrompt,
-          format: "json",
-          stream: false,
-          options: { temperature: 0.1 }
-        })
-      });
+      let ollamaRes: Response;
+      try {
+        ollamaRes = await fetch(`${targetUrl}/api/generate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: ollamaModel,
+            prompt: fullPrompt,
+            format: "json",
+            stream: false,
+            options: { temperature: 0.1 }
+          })
+        });
+      } catch (netErr: any) {
+        console.error(`[Ollama Network Error] Failed connecting to ${targetUrl}:`, netErr.message);
+        throw new Error(`Unable to connect to local Ollama service at ${targetUrl}. Ensure Ollama is active or set LLM_PROVIDER=gemini.`);
+      }
 
       if (!ollamaRes.ok) {
         const errText = await ollamaRes.text();
@@ -615,7 +626,7 @@ You MUST return ONLY a JSON object (no markdown, no backticks, no codeblocks) wi
       };
 
       const response = await callGeminiWithRetry(
-        ["gemini-3.6-flash", "gemini-flash-latest", "gemini-2.5-flash", "gemini-1.5-flash"],
+        ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash-latest", "gemini-1.5-pro"],
         {
           contents: [documentPart, promptText],
           config: {
