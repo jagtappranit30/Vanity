@@ -58,7 +58,7 @@ export default function ResultsDashboard({
   // Loading phase messages
   const LOADING_STEPS = [
     "Uploading financial statement to workspace server...",
-    "Initializing Gemini 3.5 Flash cognitive parsing...",
+    "Initializing Ollama gpt-oss cognitive parsing...",
     "Scanning Balance Sheet & Profit & Loss statements...",
     "Extracting Revenue, COGS, and liquidity figures...",
     "Measuring labour productivity & payroll leverage...",
@@ -784,7 +784,7 @@ export default function ResultsDashboard({
               <div>
                 <h4 className="text-sm font-bold text-zinc-900 dark:text-white">AI Audit & Document Traceability</h4>
                 <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed mt-0.5 font-medium">
-                  To assure strict audit traceability required in commercial reports, Gemini indexes the exact audit traces for each processed field.
+                  To assure strict audit traceability required in commercial reports, the LLM indexes the exact audit traces for each processed field.
                 </p>
               </div>
             </div>
@@ -858,7 +858,7 @@ export default function ResultsDashboard({
                 {metrics.extractedJustifications}
               </p>
               <div className="flex items-center justify-between text-[10px] font-bold uppercase text-zinc-400 dark:text-zinc-550 mt-3.5">
-                <span>Extraction Engine: Google Gemini 3.5 Flash</span>
+                <span>Extraction Engine: Ollama gpt-oss</span>
                 <span>Trace Confidence: {metrics.confidence}%</span>
               </div>
             </div>

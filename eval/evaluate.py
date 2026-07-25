@@ -16,8 +16,8 @@ Methodology
     precise reference answer verifiable against the fixture).
   - Runs: N=3 by default (configurable). Each run re-queries every
     question independently so we can report mean ± std dev.
-  - RAGAS LLM: Gemini 2.0 Flash (via langchain-google-genai).
-  - RAGAS embeddings: Gemini text-embedding-004.
+  - RAGAS LLM: OpenAI gpt-4o-mini (via langchain-openai).
+  - RAGAS embeddings: OpenAI text-embedding-3-small.
 
 Usage
 -----
@@ -83,7 +83,7 @@ DEFAULT_RAG_URL = "http://localhost:3000/api/rag"
 
 # Load .env from project root (one level up from eval/)
 load_dotenv(dotenv_path=EVAL_DIR.parent / ".env")
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 
 
@@ -145,9 +145,9 @@ def build_ragas_evaluator():
     Uses gpt-4o-mini as the judge LLM (cheap, fast, no free-tier daily cap)
     and text-embedding-3-small for answer relevancy embeddings.
 
-    NOTE: The Vantly app itself still uses Gemini for RAG queries.
-    Only the RAGAS scoring judge is switched to OpenAI to avoid
-    Gemini free-tier quota exhaustion during batch evaluation.
+    NOTE: The Vantly app uses local Ollama for RAG queries.
+    Only the RAGAS scoring judge uses OpenAI to ensure
+    reliable evaluation scoring.
     """
     if not OPENAI_API_KEY:
         console.print(
@@ -234,18 +234,12 @@ def run_evaluation(args: argparse.Namespace) -> None:
             console.print(f"[red]✗ RAG service returned HTTP {e.response.status_code}[/red]")
             sys.exit(1)
 
-        gemini_ok = health.get("gemini_api_configured", False)
+        ollama_model = health.get("ollama_model", "gpt-oss")
         docs_indexed = health.get("indexed_documents_count", 0)
         console.print(
-            f"[green]✓[/green] Service healthy | Gemini API: "
-            f"{'[green]configured[/green]' if gemini_ok else '[red]NOT configured[/red]'} | "
+            f"[green]✓[/green] Service healthy | LLM: Ollama ({ollama_model}) | "
             f"Docs already indexed: [cyan]{docs_indexed}[/cyan]"
         )
-
-        if not gemini_ok:
-            console.print("[yellow]⚠ GEMINI_API_KEY not configured in the RAG service.[/yellow]")
-            console.print("  The engine will fall back to hash-based embeddings, which will")
-            console.print("  produce low context scores. Set GEMINI_API_KEY before evaluating.")
 
         # ── 4. Index the fixture document ─────────────────────────────────────
         console.print(f"\n[bold]Indexing fixture document (doc_id={DOC_ID})...[/bold]")
@@ -311,14 +305,14 @@ def run_evaluation(args: argparse.Namespace) -> None:
 
             all_run_samples.append(run_samples)
 
-            # Brief pause between runs to avoid Gemini rate limits during indexing/querying
+            # Brief pause between runs to avoid Ollama rate limits during indexing/querying
             if run_idx < n_runs:
                 console.print(f"  Sleeping 5s between runs to avoid rate limits...")
                 time.sleep(5)
 
     # ── 6. RAGAS evaluation ───────────────────────────────────────────────────
     console.rule("[bold]RAGAS Evaluation[/bold]")
-    console.print("Building RAGAS evaluator with Gemini 2.0 Flash + text-embedding-004...")
+    console.print("Building RAGAS evaluator with OpenAI gpt-4o-mini + text-embedding-3-small...")
     metrics, metric_names = build_ragas_evaluator()
 
     run_agg_rows: list[dict] = []       # One row per run, aggregated across questions

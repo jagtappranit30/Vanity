@@ -6,28 +6,25 @@ import requests
 from typing import List, Dict, Any, Optional
 import numpy as np
 from pypdf import PdfReader
-from google import genai
-from google.genai import types
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("rag_engine")
 
 class RAGEngine:
     def __init__(self):
-        self.provider = os.environ.get("LLM_PROVIDER", "").lower()
         self.ollama_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
         self.ollama_model = os.environ.get("OLLAMA_MODEL", "gpt-oss")
-
-        self.api_key = os.environ.get("GEMINI_API_KEY")
-        if self.api_key:
-            self.client = genai.Client(api_key=self.api_key)
-        else:
-            self.client = None
-            logger.info("GEMINI_API_KEY not set in environment.")
 
         # In-memory vector store structure:
         # { doc_id: [{ "id": str, "text": str, "page": int, "embedding": np.ndarray }] }
         self.vector_store: Dict[str, List[Dict[str, Any]]] = {}
+
+    def _resolve_ollama_url(self) -> str:
+        """Returns the correct Ollama URL, adjusting for Docker networking."""
+        url = self.ollama_url
+        if os.environ.get("SQL_HOST") == "db" and ("localhost" in url or "127.0.0.1" in url):
+            url = url.replace("localhost", "host.docker.internal").replace("127.0.0.1", "host.docker.internal")
+        return url
 
     def extract_text(self, file_bytes: bytes, file_name: str) -> List[Dict[str, Any]]:
         """Extracts text page by page from PDF or raw file."""
@@ -86,36 +83,23 @@ class RAGEngine:
         return chunks
 
     def _get_embedding(self, text: str) -> np.ndarray:
-        """Generates embedding vector using a Gemini embedding model or fallback vector.
-
-        NOTE: The google-genai SDK routes embed_content() through batchEmbedContents.
-        text-embedding-004 does NOT support batchEmbedContents in v1beta — use
-        gemini-embedding-001 instead, which does.
-        """
-        EMBEDDING_MODELS = ["gemini-embedding-001", "gemini-embedding-2"]
-        if self.client:
-            for model_name in EMBEDDING_MODELS:
-                try:
-                    response = self.client.models.embed_content(
-                        model=model_name,
-                        contents=text
-                    )
-                    if hasattr(response, "embeddings") and response.embeddings and len(response.embeddings) > 0:
-                        values = response.embeddings[0].values
-                        if values:
-                            vec = np.array(values, dtype=np.float32)
-                            norm = np.linalg.norm(vec)
-                            return vec / (norm + 1e-10)
-                    elif hasattr(response, "embedding") and response.embedding and hasattr(response.embedding, "values") and response.embedding.values:
-                        values = response.embedding.values
-                        vec = np.array(values, dtype=np.float32)
-                        norm = np.linalg.norm(vec)
-                        return vec / (norm + 1e-10)
-                    # model responded but returned no values — try next
-                except Exception as e:
-                    logger.warning(
-                        f"Embedding failed with model '{model_name}': {e}. Trying next model."
-                    )
+        """Generates embedding vector using local Ollama embeddings API with hash fallback."""
+        ollama_url = self._resolve_ollama_url()
+        try:
+            resp = requests.post(
+                f"{ollama_url}/api/embeddings",
+                json={"model": self.ollama_model, "prompt": text},
+                timeout=30
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                values = data.get("embedding")
+                if values and len(values) > 0:
+                    vec = np.array(values, dtype=np.float32)
+                    norm = np.linalg.norm(vec)
+                    return vec / (norm + 1e-10)
+        except Exception as e:
+            logger.warning(f"Ollama embedding request failed: {e}. Using hash fallback.")
 
         # Deterministic lightweight hash fallback vector (128 dims)
         vec = np.zeros(128, dtype=np.float32)
@@ -177,30 +161,8 @@ class RAGEngine:
             for item in top_results
         ]
 
-    def resolve_task_llm(self, task: str = "rag"):
-        global_provider = os.environ.get("LLM_PROVIDER", "").lower()
-        task_env_prefix = task.upper()
-        task_provider = os.environ.get(f"{task_env_prefix}_LLM_PROVIDER", "").lower() or global_provider
-        gemini_key = os.environ.get("GEMINI_API_KEY")
-        ollama_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
-
-        provider = "gemini"
-        if task_provider == "ollama" or (not gemini_key and ollama_url):
-            provider = "ollama"
-        elif task_provider == "gemini":
-            provider = "gemini"
-
-        model = os.environ.get(f"{task_env_prefix}_MODEL")
-        if not model:
-            if provider == "gemini":
-                model = "gemini-3.6-flash"
-            else:
-                model = os.environ.get("OLLAMA_MODEL", "gpt-oss")
-
-        return provider, model, ollama_url, gemini_key
-
     def query(self, doc_id: str, question: str, top_k: int = 5) -> Dict[str, Any]:
-        """Queries the vector index using the configured multi-LLM task router."""
+        """Queries the vector index using local Ollama gpt-oss model."""
         relevant_chunks = self.search_similar_chunks(doc_id, question, top_k=top_k)
 
         if not relevant_chunks:
@@ -227,52 +189,28 @@ class RAGEngine:
 
         user_prompt = f"Document Context:\n{context_str}\n\nQuestion: {question}"
 
-        provider, model_name, ollama_url, gemini_key = self.resolve_task_llm("rag")
-        logger.info(f"[Multi-LLM Router] Task: Vector RAG Q&A | Provider: {provider.upper()} | Model: {model_name}")
+        ollama_url = self._resolve_ollama_url()
+        model_name = self.ollama_model
+        logger.info(f"[RAG Query] Provider: OLLAMA | Model: {model_name} | URL: {ollama_url}")
 
         answer = ""
-        if provider == "ollama":
-            try:
-                logger.info(f"Querying local Ollama model '{model_name}' at {ollama_url}...")
-                resp = requests.post(
-                    f"{ollama_url}/api/generate",
-                    json={
-                        "model": model_name,
-                        "system": system_prompt,
-                        "prompt": user_prompt,
-                        "stream": False,
-                        "options": {"temperature": 0.2}
-                    },
-                    timeout=60
-                )
-                if resp.status_code == 200:
-                    answer = resp.json().get("response", "")
-            except Exception as e:
-                logger.warning(f"Ollama query failed: {e}")
-
-        if not answer and self.client:
-            models_to_try = [model_name, "gemini-3.6-flash"]
-            for m in models_to_try:
-                for attempt in range(1, 4):
-                    try:
-                        response = self.client.models.generate_content(
-                            model=m,
-                            contents=user_prompt,
-                            config=types.GenerateContentConfig(
-                                system_instruction=system_prompt,
-                                temperature=0.2
-                            )
-                        )
-                        if response and response.text:
-                            answer = response.text
-                            break
-                    except Exception as e:
-                        logger.warning(f"RAG query error with model {m} (attempt {attempt}): {e}")
-                        if attempt < 3:
-                            import time
-                            time.sleep(1.5 * attempt)
-                if answer:
-                    break
+        try:
+            resp = requests.post(
+                f"{ollama_url}/api/generate",
+                json={
+                    "model": model_name,
+                    "system": system_prompt,
+                    "prompt": user_prompt,
+                    "stream": False,
+                    "keep_alive": "10m",
+                    "options": {"temperature": 0.2, "num_ctx": 8192}
+                },
+                timeout=120
+            )
+            if resp.status_code == 200:
+                answer = resp.json().get("response", "")
+        except Exception as e:
+            logger.warning(f"Ollama query failed: {e}")
 
         if not answer:
             answer = "RAG context retrieved successfully:\n\n" + "\n".join([f"• Page {c['page']}: {c['text'][:150]}..." for c in relevant_chunks])

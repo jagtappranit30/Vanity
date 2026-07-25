@@ -104,7 +104,7 @@ export default function UploadForm({ onStartAssessment, isLoading, error, setErr
             </div>
             <div className="hidden md:flex items-center gap-1 text-zinc-450 dark:text-zinc-500 text-[11px] font-semibold bg-zinc-50 dark:bg-zinc-950 px-3 py-1.5 rounded-xl border border-zinc-200/50 dark:border-zinc-850">
               <Info className="w-3.5 h-3.5 text-indigo-500" />
-              Gemini 3.5 Flash Powered
+              Ollama gpt-oss Powered
             </div>
           </div>
 

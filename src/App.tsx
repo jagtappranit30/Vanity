@@ -265,7 +265,7 @@ export default function App() {
                     See your business clearly
                   </h1>
                   <p className="text-zinc-300 text-xs sm:text-sm leading-relaxed font-medium">
-                    Upload SME accounts as PDF or CSV. Our platform leverages advanced Gemini models and direct UK sector percentiles to evaluate productivity leverage, gross margins, and liquidity health.
+                    Upload SME accounts as PDF or CSV. Our platform leverages advanced local LLM models and direct UK sector percentiles to evaluate productivity leverage, gross margins, and liquidity health.
                   </p>
                 </div>
 
@@ -567,7 +567,7 @@ export default function App() {
 
       {/* Footer credits */}
       <footer className="w-full bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800 py-6 px-6 mt-auto text-center text-4xs text-zinc-400 dark:text-zinc-500 font-bold uppercase tracking-widest transition-colors duration-300">
-        Vantly • See your business clearly • Powered by Gemini & Cloud SQL
+        Vantly • See your business clearly • Powered by Ollama & Cloud SQL
       </footer>
 
       {/* Academic Framework Specs Modal */}

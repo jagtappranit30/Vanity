@@ -5,7 +5,7 @@ score_only.py — RAGAS scoring against already-collected raw Q&A data.
 The full evaluate.py already ran all 30 queries (10 questions x 3 runs)
 and saved them to results/ragas_results_raw.csv. This script reads that
 file and runs ONLY the RAGAS scoring step, using OpenAI gpt-4o-mini as
-the judge LLM (avoids Gemini free-tier quota).
+the judge LLM.
 
 Usage (from the eval/ directory):
     source .venv/bin/activate

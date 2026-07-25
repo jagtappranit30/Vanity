@@ -35,8 +35,7 @@ services:
       - SQL_PASSWORD=postgres
       - SQL_ADMIN_USER=postgres
       - SQL_ADMIN_PASSWORD=postgres
-      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
-      - LLM_PROVIDER=${LLM_PROVIDER:-}
+      - LLM_PROVIDER=${LLM_PROVIDER:-ollama}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       - OLLAMA_MODEL=${OLLAMA_MODEL:-gpt-oss}
       - NODE_ENV=production

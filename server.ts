@@ -5,7 +5,7 @@ import { spawn } from "child_process";
 import { createServer as createViteServer } from "vite";
 import multer from "multer";
 import dotenv from "dotenv";
-import { GoogleGenAI, Type } from "@google/genai";
+// Local Ollama-only LLM — no cloud dependencies
 import { FinancialMetrics, SectorBenchmarks, AssessmentScores, AssessmentRun } from "./src/types";
 import { db } from "./src/db/index.ts";
 import { assessments } from "./src/db/schema.ts";
@@ -457,56 +457,41 @@ async function extractTextForOllama(buffer: Buffer, originalName: string, isPDF:
 }
 
 interface TaskLLMConfig {
-  provider: "gemini" | "ollama";
+  provider: "ollama";
   model: string;
   ollamaUrl?: string;
-  geminiApiKey?: string;
 }
 
 // Multi-LLM Router by Use Case
 function resolveTaskLLM(task: "assessment" | "rag" | "strategy"): TaskLLMConfig {
   const globalProvider = (process.env.LLM_PROVIDER || "").toLowerCase();
-  const geminiApiKey = process.env.GEMINI_API_KEY;
   const ollamaUrl = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
 
   const taskEnvPrefix = task.toUpperCase();
   const taskProvider = process.env[`${taskEnvPrefix}_LLM_PROVIDER`]?.toLowerCase() || globalProvider;
 
-  let provider: "gemini" | "ollama" = "gemini";
-  if (taskProvider === "ollama") {
-    provider = "ollama";
-  } else if (taskProvider === "gemini") {
-    provider = "gemini";
-  } else if (!geminiApiKey && ollamaUrl) {
-    provider = "ollama";
-  }
+  const provider: "ollama" = "ollama";
 
   let model = process.env[`${taskEnvPrefix}_MODEL`];
   if (!model) {
-    if (provider === "gemini") {
-      model = "gemini-3.6-flash";
-    } else {
-      model = process.env.OLLAMA_MODEL || "gpt-oss";
-    }
+    model = process.env.OLLAMA_MODEL || "gpt-oss";
   }
 
   return {
     provider,
     model,
     ollamaUrl,
-    geminiApiKey,
   };
 }
 
     const llmConfig = resolveTaskLLM("assessment");
     console.log(`[Multi-LLM Router] Task: Financial Assessment | Provider: ${llmConfig.provider.toUpperCase()} | Model: ${llmConfig.model}`);
 
-    const useOllama = llmConfig.provider === "ollama";
-    const apiKey = llmConfig.geminiApiKey;
+    const apiKey = undefined;
     const ollamaUrl = llmConfig.ollamaUrl;
     const ollamaModel = llmConfig.model;
 
-    let geminiResult: any = null;
+    let llmResult: any = null;
 
     let mimeType = isPDF ? "application/pdf" : "text/csv";
     if (isCSV && !file.mimetype.includes("csv")) {
@@ -621,62 +606,7 @@ You MUST return ONLY a JSON object (no markdown, no backticks, no codeblocks) wi
       return extractJSONObject(rawText);
     };
 
-    const tryGemini = async () => {
-      if (!apiKey) {
-        throw new Error("Gemini API key is not configured.");
-      }
-      console.log(`[Assessment Engine] Calling cloud Gemini model 'gemini-3.6-flash'...`);
-      const ai = new GoogleGenAI({ apiKey });
-      const documentPart = {
-        inlineData: {
-          data: file.buffer.toString("base64"),
-          mimeType: mimeType,
-        }
-      };
 
-      const response = await ai.models.generateContent({
-        model: "gemini-3.6-flash",
-        contents: [documentPart, promptText],
-        config: {
-          temperature: 0,
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              companyName: { type: Type.STRING },
-              revenue: { type: Type.NUMBER },
-              headcount: { type: Type.INTEGER },
-              cogs: { type: Type.NUMBER },
-              payroll: { type: Type.NUMBER },
-              grossMargin: { type: Type.NUMBER },
-              operatingMargin: { type: Type.NUMBER },
-              currentAssets: { type: Type.NUMBER },
-              currentLiabilities: { type: Type.NUMBER },
-              digitalTools: { type: Type.ARRAY, items: { type: Type.STRING } },
-              confidence: { type: Type.NUMBER },
-              thoughtProcess: { type: Type.STRING },
-              extractedJustifications: { type: Type.STRING },
-              digitalMaturityLevel: { type: Type.STRING },
-              recommendations: { type: Type.ARRAY, items: { type: Type.STRING } },
-              qualitativeAnalysis: { type: Type.STRING }
-            },
-            required: [
-              "companyName", "revenue", "headcount", "digitalTools", "confidence",
-              "thoughtProcess", "extractedJustifications", "digitalMaturityLevel",
-              "recommendations", "qualitativeAnalysis"
-            ]
-          }
-        }
-      });
-
-      if (!response.text) {
-        throw new Error("Empty response from Gemini assessment engine.");
-      }
-
-      const rawText = response.text.trim();
-      const cleanedText = rawText.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/i, "").trim();
-      return JSON.parse(cleanedText);
-    };
 
 // Deterministic pre-parsing helper for CSV financial tables & key-value files
 function preParseCSVMetrics(text: string): Partial<FinancialMetrics> {
@@ -718,57 +648,35 @@ function preParseCSVMetrics(text: string): Partial<FinancialMetrics> {
   return result;
 }
 
-    if (preferredProvider === "ollama") {
-      try {
-        geminiResult = await tryOllama();
-      } catch (ollamaErr: any) {
-        console.warn(`[Failover Warning] Local Ollama failed (${ollamaErr.message}). Automatically trying Gemini...`);
-        try {
-          geminiResult = await tryGemini();
-        } catch (geminiErr: any) {
-          throw new Error(`Assessment failed: Local Ollama (${ollamaErr.message}) and Cloud Gemini (${geminiErr.message}) both failed.`);
-        }
-      }
-    } else {
-      try {
-        geminiResult = await tryGemini();
-      } catch (geminiErr: any) {
-        console.warn(`[Failover Warning] Cloud Gemini failed (${geminiErr.message}). Automatically trying local Ollama...`);
-        try {
-          geminiResult = await tryOllama();
-        } catch (ollamaErr: any) {
-          throw new Error(`Assessment failed: Cloud Gemini (${geminiErr.message}) and Local Ollama (${ollamaErr.message}) both failed.`);
-        }
-      }
-    }
+    llmResult = await tryOllama();
 
     // Pre-parse CSV for exact numerical values if available
     const preParsed = isCSV ? preParseCSVMetrics(file.buffer.toString("utf-8")) : {};
 
     // Override LLM output with exact pre-parsed metrics whenever present for 100% consistency
-    const rev = preParsed.revenue ?? geminiResult.revenue ?? null;
-    const hc = preParsed.headcount ?? geminiResult.headcount ?? null;
-    const cogsVal = preParsed.cogs ?? geminiResult.cogs ?? null;
-    const pay = preParsed.payroll ?? geminiResult.payroll ?? null;
-    const ca = preParsed.currentAssets ?? geminiResult.currentAssets ?? null;
-    const cl = preParsed.currentLiabilities ?? geminiResult.currentLiabilities ?? null;
+    const rev = preParsed.revenue ?? llmResult.revenue ?? null;
+    const hc = preParsed.headcount ?? llmResult.headcount ?? null;
+    const cogsVal = preParsed.cogs ?? llmResult.cogs ?? null;
+    const pay = preParsed.payroll ?? llmResult.payroll ?? null;
+    const ca = preParsed.currentAssets ?? llmResult.currentAssets ?? null;
+    const cl = preParsed.currentLiabilities ?? llmResult.currentLiabilities ?? null;
 
     // Calculate margins deterministically
     let grossM: number | null = null;
     if (rev !== null && cogsVal !== null && rev > 0) {
       grossM = Math.round(((rev - cogsVal) / rev) * 100 * 10) / 10;
-    } else if (geminiResult.grossMargin != null) {
-      grossM = Math.round(geminiResult.grossMargin * 10) / 10;
+    } else if (llmResult.grossMargin != null) {
+      grossM = Math.round(llmResult.grossMargin * 10) / 10;
     }
 
     let opM: number | null = null;
     if (rev !== null && pay !== null && rev > 0) {
       opM = Math.round(((rev - (cogsVal || 0) - pay) / rev) * 100 * 10) / 10;
-    } else if (geminiResult.operatingMargin != null) {
-      opM = Math.round(geminiResult.operatingMargin * 10) / 10;
+    } else if (llmResult.operatingMargin != null) {
+      opM = Math.round(llmResult.operatingMargin * 10) / 10;
     }
 
-    const companyName = customCompanyName || preParsed.companyName || geminiResult.companyName || "SME Enterprise";
+    const companyName = customCompanyName || preParsed.companyName || llmResult.companyName || "SME Enterprise";
 
     const metrics: FinancialMetrics = {
       companyName,
@@ -780,9 +688,9 @@ function preParseCSVMetrics(text: string): Partial<FinancialMetrics> {
       operatingMargin: opM,
       currentAssets: ca,
       currentLiabilities: cl,
-      digitalTools: geminiResult.digitalTools || [],
-      confidence: geminiResult.confidence || 85,
-      extractedJustifications: geminiResult.extractedJustifications || "Extracted using deterministic general ledger analysis."
+      digitalTools: llmResult.digitalTools || [],
+      confidence: llmResult.confidence || 85,
+      extractedJustifications: llmResult.extractedJustifications || "Extracted using deterministic general ledger analysis."
     };
 
     // Run scoring engine against benchmarks deterministically

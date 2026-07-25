@@ -26,7 +26,8 @@ def health_check():
     return {
         "status": "healthy",
         "service": "Vantly AI Python RAG Engine",
-        "gemini_api_configured": rag_engine.client is not None,
+        "llm_provider": "ollama",
+        "ollama_model": rag_engine.ollama_model,
         "indexed_documents_count": len(rag_engine.vector_store)
     }
 

@@ -143,7 +143,7 @@ export const RAGChat: React.FC<RAGChatProps> = ({ docId, companyName, fileName }
               </h3>
               <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide uppercase bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/60">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                FastAPI + PyPDF + Gemini Vectors
+                FastAPI + PyPDF + Ollama Vectors
               </span>
             </div>
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
@@ -311,7 +311,7 @@ export const RAGChat: React.FC<RAGChatProps> = ({ docId, companyName, fileName }
           <span className="flex items-center gap-1">
             <ShieldCheck className="w-3 h-3 text-emerald-500" /> Grounded in original document text
           </span>
-          <span>FastAPI • pypdf • Gemini Vector Embeddings</span>
+          <span>FastAPI • pypdf • Ollama Vector Embeddings</span>
         </div>
       </div>
     </div>
