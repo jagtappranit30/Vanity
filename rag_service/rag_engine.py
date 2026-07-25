@@ -92,7 +92,7 @@ class RAGEngine:
         text-embedding-004 does NOT support batchEmbedContents in v1beta — use
         gemini-embedding-001 instead, which does.
         """
-        EMBEDDING_MODELS = ["gemini-embedding-001", "text-embedding-004"]
+        EMBEDDING_MODELS = ["gemini-embedding-001", "gemini-embedding-2"]
         if self.client:
             for model_name in EMBEDDING_MODELS:
                 try:
