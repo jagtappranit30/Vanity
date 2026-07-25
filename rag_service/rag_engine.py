@@ -100,8 +100,15 @@ class RAGEngine:
                         model=model_name,
                         contents=text
                     )
-                    if response.embedding and response.embedding.values:
-                        vec = np.array(response.embedding.values, dtype=np.float32)
+                    if hasattr(response, "embeddings") and response.embeddings and len(response.embeddings) > 0:
+                        values = response.embeddings[0].values
+                        if values:
+                            vec = np.array(values, dtype=np.float32)
+                            norm = np.linalg.norm(vec)
+                            return vec / (norm + 1e-10)
+                    elif hasattr(response, "embedding") and response.embedding and hasattr(response.embedding, "values") and response.embedding.values:
+                        values = response.embedding.values
+                        vec = np.array(values, dtype=np.float32)
                         norm = np.linalg.norm(vec)
                         return vec / (norm + 1e-10)
                     # model responded but returned no values — try next
