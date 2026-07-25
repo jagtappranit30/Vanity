@@ -464,7 +464,7 @@ function resolveTaskLLM(task: "assessment" | "rag" | "strategy"): TaskLLMConfig 
   let model = process.env[`${taskEnvPrefix}_MODEL`];
   if (!model) {
     if (provider === "gemini") {
-      model = task === "assessment" ? "gemini-2.5-flash" : task === "rag" ? "gemini-2.5-flash" : "gemini-2.5-flash";
+      model = task === "assessment" ? "gemini-3.6-flash" : task === "rag" ? "gemini-3.6-flash" : "gemini-3.6-flash";
     } else {
       model = process.env.OLLAMA_MODEL || "llama3";
     }
@@ -626,7 +626,7 @@ You MUST return ONLY a JSON object (no markdown, no backticks, no codeblocks) wi
       };
 
       const response = await callGeminiWithRetry(
-        ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash-latest", "gemini-1.5-pro"],
+        ["gemini-3.6-flash", "gemini-2.0-flash", "gemini-2.5-pro"],
         {
           contents: [documentPart, promptText],
           config: {

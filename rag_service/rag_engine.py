@@ -186,7 +186,7 @@ class RAGEngine:
         model = os.environ.get(f"{task_env_prefix}_MODEL")
         if not model:
             if provider == "gemini":
-                model = "gemini-2.5-flash"
+                model = "gemini-3.6-flash"
             else:
                 model = os.environ.get("OLLAMA_MODEL", "llama3")
 
@@ -244,7 +244,7 @@ class RAGEngine:
                 logger.warning(f"Ollama query failed: {e}")
 
         if not answer and self.client:
-            models_to_try = [model_name, "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash-latest"]
+            models_to_try = [model_name, "gemini-3.6-flash", "gemini-2.0-flash"]
             for m in models_to_try:
                 for attempt in range(1, 4):
                     try:
