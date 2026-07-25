@@ -524,16 +524,15 @@ Your task is to:
 
 You must return the result as a single JSON object matching the requested schema exactly.`;
 
-    if (useOllama) {
+    const preferredProvider = llmConfig.provider;
+
+    const tryOllama = async () => {
       let targetUrl = ollamaUrl || "http://localhost:11434";
-      // Translate localhost -> host.docker.internal when running inside Docker container
       if (process.env.SQL_HOST === "db" && (targetUrl.includes("localhost") || targetUrl.includes("127.0.0.1"))) {
         targetUrl = targetUrl.replace("localhost", "host.docker.internal").replace("127.0.0.1", "host.docker.internal");
       }
-
-      console.log(`[Ollama Request] Calling local offline Ollama model '${ollamaModel}' at ${targetUrl}...`);
+      console.log(`[Assessment Engine] Calling local Ollama model '${ollamaModel}' at ${targetUrl}...`);
       const docText = extractTextForOllama(file.buffer, isPDF);
-
       const jsonFormatGuide = `
 You MUST return ONLY a JSON object (no markdown, no backticks, no codeblocks) with this EXACT structure:
 {
@@ -557,40 +556,34 @@ You MUST return ONLY a JSON object (no markdown, no backticks, no codeblocks) wi
 `;
       const fullPrompt = `${promptText}\n\n${jsonFormatGuide}\n\nDOCUMENT TEXT CONTENT:\n${docText}`;
 
-      let ollamaRes: Response;
-      try {
-        ollamaRes = await fetch(`${targetUrl}/api/generate`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            model: ollamaModel,
-            prompt: fullPrompt,
-            format: "json",
-            stream: false,
-            options: { temperature: 0.1 }
-          })
-        });
-      } catch (netErr: any) {
-        console.error(`[Ollama Network Error] Failed connecting to ${targetUrl}:`, netErr.message);
-        throw new Error(`Unable to connect to local Ollama service at ${targetUrl}. Ensure Ollama is active or set LLM_PROVIDER=gemini.`);
+      const res = await fetch(`${targetUrl}/api/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: ollamaModel,
+          prompt: fullPrompt,
+          format: "json",
+          stream: false,
+          options: { temperature: 0.1 }
+        })
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Ollama API error (${res.status}): ${errText}`);
       }
 
-      if (!ollamaRes.ok) {
-        const errText = await ollamaRes.text();
-        throw new Error(`Ollama API error (${ollamaRes.status}): ${errText}`);
-      }
-
-      const ollamaData: any = await ollamaRes.json();
-      const rawText = (ollamaData.response || "{}").trim();
+      const data: any = await res.json();
+      const rawText = (data.response || "{}").trim();
       const cleanedText = rawText.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/i, "").trim();
-      geminiResult = JSON.parse(cleanedText);
-    } else {
-      if (!apiKey) {
-        return res.status(400).json({
-          error: "No LLM provider configured. Set GEMINI_API_KEY for Google Gemini, or set LLM_PROVIDER=ollama and OLLAMA_BASE_URL=http://localhost:11434 for local offline Ollama."
-        });
-      }
+      return JSON.parse(cleanedText);
+    };
 
+    const tryGemini = async () => {
+      if (!apiKey) {
+        throw new Error("Gemini API key is not configured.");
+      }
+      console.log(`[Assessment Engine] Calling cloud Gemini model 'gemini-3.6-flash'...`);
       const ai = new GoogleGenAI({ apiKey });
       const documentPart = {
         inlineData: {
@@ -599,68 +592,40 @@ You MUST return ONLY a JSON object (no markdown, no backticks, no codeblocks) wi
         }
       };
 
-      const callGeminiWithRetry = async (models: string[], reqOptions: any, maxRetries = 3) => {
-        let lastError: any = null;
-        for (const modelName of models) {
-          for (let attempt = 1; attempt <= maxRetries; attempt++) {
-            try {
-              console.log(`[Gemini Request] Calling model=${modelName} (Attempt ${attempt}/${maxRetries})...`);
-              const res = await ai.models.generateContent({
-                ...reqOptions,
-                model: modelName,
-              });
-              if (res && res.text) {
-                return res;
-              }
-            } catch (err: any) {
-              lastError = err;
-              console.warn(`[Gemini Retry Warning] Model ${modelName} attempt ${attempt} failed: ${err.message}`);
-              if (attempt < maxRetries) {
-                const backoffMs = attempt * 1500;
-                await new Promise((resolve) => setTimeout(resolve, backoffMs));
-              }
-            }
+      const response = await ai.models.generateContent({
+        model: "gemini-3.6-flash",
+        contents: [documentPart, promptText],
+        config: {
+          temperature: 0,
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              companyName: { type: Type.STRING },
+              revenue: { type: Type.NUMBER },
+              headcount: { type: Type.INTEGER },
+              cogs: { type: Type.NUMBER },
+              payroll: { type: Type.NUMBER },
+              grossMargin: { type: Type.NUMBER },
+              operatingMargin: { type: Type.NUMBER },
+              currentAssets: { type: Type.NUMBER },
+              currentLiabilities: { type: Type.NUMBER },
+              digitalTools: { type: Type.ARRAY, items: { type: Type.STRING } },
+              confidence: { type: Type.NUMBER },
+              thoughtProcess: { type: Type.STRING },
+              extractedJustifications: { type: Type.STRING },
+              digitalMaturityLevel: { type: Type.STRING },
+              recommendations: { type: Type.ARRAY, items: { type: Type.STRING } },
+              qualitativeAnalysis: { type: Type.STRING }
+            },
+            required: [
+              "companyName", "revenue", "headcount", "digitalTools", "confidence",
+              "thoughtProcess", "extractedJustifications", "digitalMaturityLevel",
+              "recommendations", "qualitativeAnalysis"
+            ]
           }
         }
-        throw lastError || new Error("All Gemini model attempts failed.");
-      };
-
-      const response = await callGeminiWithRetry(
-        ["gemini-3.6-flash", "gemini-2.0-flash", "gemini-2.5-pro"],
-        {
-          contents: [documentPart, promptText],
-          config: {
-            temperature: 0,
-            responseMimeType: "application/json",
-            responseSchema: {
-              type: Type.OBJECT,
-              properties: {
-                companyName: { type: Type.STRING },
-                revenue: { type: Type.NUMBER },
-                headcount: { type: Type.INTEGER },
-                cogs: { type: Type.NUMBER },
-                payroll: { type: Type.NUMBER },
-                grossMargin: { type: Type.NUMBER },
-                operatingMargin: { type: Type.NUMBER },
-                currentAssets: { type: Type.NUMBER },
-                currentLiabilities: { type: Type.NUMBER },
-                digitalTools: { type: Type.ARRAY, items: { type: Type.STRING } },
-                confidence: { type: Type.NUMBER },
-                thoughtProcess: { type: Type.STRING },
-                extractedJustifications: { type: Type.STRING },
-                digitalMaturityLevel: { type: Type.STRING },
-                recommendations: { type: Type.ARRAY, items: { type: Type.STRING } },
-                qualitativeAnalysis: { type: Type.STRING }
-              },
-              required: [
-                "companyName", "revenue", "headcount", "digitalTools", "confidence",
-                "thoughtProcess", "extractedJustifications", "digitalMaturityLevel",
-                "recommendations", "qualitativeAnalysis"
-              ]
-            }
-          }
-        }
-      );
+      });
 
       if (!response.text) {
         throw new Error("Empty response from Gemini assessment engine.");
@@ -668,7 +633,31 @@ You MUST return ONLY a JSON object (no markdown, no backticks, no codeblocks) wi
 
       const rawText = response.text.trim();
       const cleanedText = rawText.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/i, "").trim();
-      geminiResult = JSON.parse(cleanedText);
+      return JSON.parse(cleanedText);
+    };
+
+    if (preferredProvider === "ollama") {
+      try {
+        geminiResult = await tryOllama();
+      } catch (ollamaErr: any) {
+        console.warn(`[Failover Warning] Local Ollama failed (${ollamaErr.message}). Automatically trying Gemini...`);
+        try {
+          geminiResult = await tryGemini();
+        } catch (geminiErr: any) {
+          throw new Error(`Assessment failed: Local Ollama (${ollamaErr.message}) and Cloud Gemini (${geminiErr.message}) both failed.`);
+        }
+      }
+    } else {
+      try {
+        geminiResult = await tryGemini();
+      } catch (geminiErr: any) {
+        console.warn(`[Failover Warning] Cloud Gemini failed (${geminiErr.message}). Automatically trying local Ollama...`);
+        try {
+          geminiResult = await tryOllama();
+        } catch (ollamaErr: any) {
+          throw new Error(`Assessment failed: Cloud Gemini (${geminiErr.message}) and Local Ollama (${ollamaErr.message}) both failed.`);
+        }
+      }
     }
 
     // Merge custom name if provided
@@ -745,8 +734,12 @@ You MUST return ONLY a JSON object (no markdown, no backticks, no codeblocks) wi
 
   } catch (error: any) {
     console.error("Assessment error:", error);
+    let errorMsg = error.message || String(error);
+    if (errorMsg.includes("RESOURCE_EXHAUSTED") || errorMsg.includes("429") || errorMsg.includes("quota")) {
+      errorMsg = "Cloud API quota limits reached and local Ollama model was unavailable. Please retry in a few moments or start Ollama.";
+    }
     res.status(500).json({
-      error: `Assessment failed: ${error.message || error}`
+      error: errorMsg
     });
   }
 });

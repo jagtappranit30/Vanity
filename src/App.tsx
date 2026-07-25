@@ -161,7 +161,11 @@ export default function App() {
       setSelectedAssessment(data);
     } catch (err: any) {
       console.error("Processing failed:", err);
-      setProcessingError(err.message || "Failed to process document. Please check your network connection.");
+      let msg = err.message || "Failed to process document. Please check your network connection.";
+      if (msg.includes("RESOURCE_EXHAUSTED") || msg.includes("429") || msg.includes("quota")) {
+        msg = "Cloud API quota limits reached and local Ollama model was unavailable. Please start Ollama or try again in a few moments.";
+      }
+      setProcessingError(msg);
     } finally {
       setIsProcessing(false);
     }
