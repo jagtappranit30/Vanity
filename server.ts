@@ -418,7 +418,27 @@ app.post("/api/assess", optionalAuth, upload.single("file"), async (req: AuthReq
     const isCSV = fileExtension === ".CSV" || file.mimetype === "text/csv" || file.mimetype === "application/vnd.ms-excel";
 
 // Extract plain text from PDF or CSV buffer for offline Ollama processing
-function extractTextForOllama(buffer: Buffer, isPDF: boolean): string {
+// Extract clean text from PDF or CSV using Python RAG service /extract endpoint with fallback
+async function extractTextForOllama(buffer: Buffer, originalName: string, isPDF: boolean): Promise<string> {
+  try {
+    const FormData = (await import("form-data")).default;
+    const form = new FormData();
+    form.append("file", buffer, { filename: originalName || "document.pdf" });
+    const extractRes = await fetch("http://127.0.0.1:8000/extract", {
+      method: "POST",
+      body: form as any,
+      headers: form.getHeaders(),
+    });
+    if (extractRes.ok) {
+      const data: any = await extractRes.json();
+      if (data && data.text && data.text.length > 20) {
+        return data.text;
+      }
+    }
+  } catch (err: any) {
+    console.warn("[Text Extract Warning] Python /extract service unavailable, using buffer fallback:", err.message);
+  }
+
   if (!isPDF) {
     return buffer.toString("utf-8");
   }
@@ -554,7 +574,7 @@ function extractJSONObject(rawText: string): any {
         targetUrl = targetUrl.replace("localhost", "host.docker.internal").replace("127.0.0.1", "host.docker.internal");
       }
       console.log(`[Assessment Engine] Calling local Ollama model '${ollamaModel}' at ${targetUrl}...`);
-      const docText = extractTextForOllama(file.buffer, isPDF);
+      const docText = await extractTextForOllama(file.buffer, file.originalname, isPDF);
       const jsonFormatGuide = `
 You MUST return ONLY a JSON object (no markdown, no backticks, no codeblocks) with this EXACT structure:
 {
@@ -586,7 +606,8 @@ You MUST return ONLY a JSON object (no markdown, no backticks, no codeblocks) wi
           prompt: fullPrompt,
           format: "json",
           stream: false,
-          options: { temperature: 0.1 }
+          keep_alive: "10m",
+          options: { temperature: 0.1, num_ctx: 8192 }
         })
       });
 

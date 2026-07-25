@@ -49,6 +49,18 @@ async def index_document(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to index document: {str(e)}")
 
+@app.post("/extract")
+async def extract_document_text(file: UploadFile = File(...)):
+    try:
+        content = await file.read()
+        if not content:
+            raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+        pages = rag_engine.extract_text(file_bytes=content, file_name=file.filename or "document.pdf")
+        full_text = "\n\n".join([f"[PAGE {p['page']}]\n{p['text']}" for p in pages if p['text'].strip()])
+        return {"text": full_text or "No text extracted from document."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Text extraction failed: {str(e)}")
+
 @app.post("/query")
 def query_document(req: QueryRequest):
     try:
