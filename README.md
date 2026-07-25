@@ -234,19 +234,22 @@ docker-compose down -v        # Stop and remove the database volume
 
 ## ⚙️ Environment Variables
 
-Create a `.env` file in the project root (copy from `.env.example`):
+# ── LLM Provider Selection ─────────────────────────────────
+LLM_PROVIDER=gemini             # Options: "gemini" (cloud) or "ollama" (local offline)
 
-```env
-# ── Gemini AI ──────────────────────────────────────────────
-GEMINI_API_KEY=your_gemini_api_key_here
+# ── Cloud LLM (Gemini) ────────────────────────────────────
+GEMINI_API_KEY=your-api-key-here
 
-# ── PostgreSQL Database ────────────────────────────────────
-SQL_HOST=localhost           # Use "db" when running in Docker
+# ── Local Offline LLM (Ollama) ─────────────────────────────
+OLLAMA_BASE_URL=http://localhost:11434  # inside Docker: http://host.docker.internal:11434
+OLLAMA_MODEL=llama3                    # Model installed via `ollama pull llama3`
+
+# ── Database (Local Dev) ──────────────────────────────────
+SQL_HOST=localhost
+SQL_PORT=5432
 SQL_DB_NAME=vantly
 SQL_USER=postgres
-SQL_PASSWORD=your_db_password
-SQL_ADMIN_USER=postgres
-SQL_ADMIN_PASSWORD=your_db_password
+SQL_PASSWORD=postgres
 
 # ── Firebase (Admin SDK — server-side) ────────────────────
 FIREBASE_PROJECT_ID=your-firebase-project-id

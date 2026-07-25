@@ -36,7 +36,12 @@ services:
       - SQL_ADMIN_USER=postgres
       - SQL_ADMIN_PASSWORD=postgres
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - LLM_PROVIDER=${LLM_PROVIDER:-}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3}
       - NODE_ENV=production
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: always
 
 volumes:

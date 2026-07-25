@@ -417,34 +417,37 @@ app.post("/api/assess", optionalAuth, upload.single("file"), async (req: AuthReq
     const isPDF = fileExtension === ".PDF" || file.mimetype === "application/pdf";
     const isCSV = fileExtension === ".CSV" || file.mimetype === "text/csv" || file.mimetype === "application/vnd.ms-excel";
 
-    if (!isPDF && !isCSV) {
-      return res.status(400).json({ error: "Unsupported file format. Please upload a PDF or CSV financial document." });
-    }
+// Extract plain text from PDF or CSV buffer for offline Ollama processing
+function extractTextForOllama(buffer: Buffer, isPDF: boolean): string {
+  if (!isPDF) {
+    return buffer.toString("utf-8");
+  }
+  const raw = buffer.toString("binary");
+  const textBlocks: string[] = [];
+  const regex = /\(([^)]+)\)\s*Tj|\[([^\]]+)\]\s*TJ/g;
+  let match;
+  while ((match = regex.exec(raw)) !== null) {
+    const text = match[1] || match[2];
+    if (text) textBlocks.push(text.replace(/\\/g, ""));
+  }
+  if (textBlocks.length > 5) {
+    return textBlocks.join(" ");
+  }
+  return buffer.toString("utf-8").replace(/[^\x20-\x7E\n\r\t]/g, " ");
+}
 
+    const provider = (process.env.LLM_PROVIDER || "").toLowerCase();
     const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      return res.status(400).json({
-        error: "GEMINI_API_KEY environment variable is not configured. Please define GEMINI_API_KEY in your environment variables."
-      });
-    }
+    const ollamaUrl = process.env.OLLAMA_BASE_URL || (provider === "ollama" ? "http://localhost:11434" : undefined);
+    const ollamaModel = process.env.OLLAMA_MODEL || "llama3";
+    const useOllama = provider === "ollama" || (!apiKey && ollamaUrl);
 
-    // Initialize Gemini API client inside handler for lazy initialization
-    const ai = new GoogleGenAI({
-      apiKey,
-    });
+    let geminiResult: any = null;
 
     let mimeType = isPDF ? "application/pdf" : "text/csv";
     if (isCSV && !file.mimetype.includes("csv")) {
       mimeType = "text/plain"; // fallback for CSV content representation
     }
-
-    // Prepare multi-part input for Gemini containing the file buffer and the instructions
-    const documentPart = {
-      inlineData: {
-        data: file.buffer.toString("base64"),
-        mimeType: mimeType,
-      }
-    };
 
     const promptText = `You are an elite SME Productivity & Financial Analyst.
 Analyze the attached financial statement (which is a ${isPDF ? "PDF" : "CSV"} document) for an SME in the '${sector}' sector.
@@ -477,135 +480,141 @@ Your task is to:
 
 You must return the result as a single JSON object matching the requested schema exactly.`;
 
-    // Robust Gemini call helper with retries and model fallback
-    const callGeminiWithRetry = async (models: string[], reqOptions: any, maxRetries = 3) => {
-      let lastError: any = null;
-      for (const modelName of models) {
-        for (let attempt = 1; attempt <= maxRetries; attempt++) {
-          try {
-            console.log(`[Gemini Request] Calling model=${modelName} (Attempt ${attempt}/${maxRetries})...`);
-            const res = await ai.models.generateContent({
-              ...reqOptions,
-              model: modelName,
-            });
-            if (res && res.text) {
-              return res;
-            }
-          } catch (err: any) {
-            lastError = err;
-            console.warn(`[Gemini Retry Warning] Model ${modelName} attempt ${attempt} failed: ${err.message}`);
-            // Check if transient 503, 429, or unavailable
-            if (attempt < maxRetries) {
-              const backoffMs = attempt * 1500;
-              await new Promise((resolve) => setTimeout(resolve, backoffMs));
-            }
-          }
-        }
-      }
-      throw lastError || new Error("All Gemini model attempts failed.");
-    };
+    if (useOllama) {
+      const targetUrl = ollamaUrl || "http://localhost:11434";
+      console.log(`[Ollama Request] Calling local offline Ollama model '${ollamaModel}' at ${targetUrl}...`);
+      const docText = extractTextForOllama(file.buffer, isPDF);
 
-    const response = await callGeminiWithRetry(
-      ["gemini-3.6-flash", "gemini-flash-latest", "gemini-2.5-flash", "gemini-1.5-flash"],
-      {
-        contents: [documentPart, promptText],
-        config: {
-          temperature: 0,
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              companyName: {
-                type: Type.STRING,
-                description: "The name of the company if found, or null/empty if not present."
-              },
-              revenue: {
-                type: Type.NUMBER,
-                description: "Total annual revenue. If missing, use null."
-              },
-              headcount: {
-                type: Type.INTEGER,
-                description: "Total average number of employees. If missing, use null."
-              },
-              cogs: {
-                type: Type.NUMBER,
-                description: "Cost of Goods Sold / Cost of Sales. If missing, use null."
-              },
-              payroll: {
-                type: Type.NUMBER,
-                description: "Total wage/payroll cost. If missing, use null."
-              },
-              grossMargin: {
-                type: Type.NUMBER,
-                description: "Gross Profit Margin percentage (0 to 100). If missing, use null."
-              },
-              operatingMargin: {
-                type: Type.NUMBER,
-                description: "Operating Margin percentage (0 to 100). If missing, use null."
-              },
-              currentAssets: {
-                type: Type.NUMBER,
-                description: "Total current assets from Balance Sheet. If missing, use null."
-              },
-              currentLiabilities: {
-                type: Type.NUMBER,
-                description: "Total current liabilities from Balance Sheet. If missing, use null."
-              },
-              digitalTools: {
-                type: Type.ARRAY,
-                items: { type: Type.STRING },
-                description: "Software tools, systems, or platforms explicitly mentioned or inferred from the report."
-              },
-              confidence: {
-                type: Type.NUMBER,
-                description: "Precision confidence score of extraction from 0 to 100."
-              },
-              thoughtProcess: {
-                type: Type.STRING,
-                description: "Chain of thought: Detail step-by-step extraction analysis and verification of metrics."
-              },
-              extractedJustifications: {
-                type: Type.STRING,
-                description: "Short notes on where numbers were found (e.g., 'Revenue from Page 3 Income Statement, Headcount from Note 5')."
-              },
-              digitalMaturityLevel: {
-                type: Type.STRING,
-                description: "Must be exactly 'Low', 'Medium', or 'High'."
-              },
-              recommendations: {
-                type: Type.ARRAY,
-                items: { type: Type.STRING },
-                description: "3 to 5 customized operational/financial recommendations."
-              },
-              qualitativeAnalysis: {
-                type: Type.STRING,
-                description: "An overall summary highlighting constraints and efficiency pathways."
+      const jsonFormatGuide = `
+You MUST return ONLY a JSON object (no markdown, no backticks, no codeblocks) with this EXACT structure:
+{
+  "companyName": "Company Name string or null",
+  "revenue": number or null,
+  "headcount": integer or null,
+  "cogs": number or null,
+  "payroll": number or null,
+  "grossMargin": number or null,
+  "operatingMargin": number or null,
+  "currentAssets": number or null,
+  "currentLiabilities": number or null,
+  "digitalTools": ["tool1", "tool2"],
+  "confidence": number from 0 to 100,
+  "thoughtProcess": "chain of thought reasoning",
+  "extractedJustifications": "notes on metrics locations",
+  "digitalMaturityLevel": "Low" or "Medium" or "High",
+  "recommendations": ["suggestion 1", "suggestion 2"],
+  "qualitativeAnalysis": "analysis summary text"
+}
+`;
+      const fullPrompt = `${promptText}\n\n${jsonFormatGuide}\n\nDOCUMENT TEXT CONTENT:\n${docText}`;
+
+      const ollamaRes = await fetch(`${targetUrl}/api/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: ollamaModel,
+          prompt: fullPrompt,
+          format: "json",
+          stream: false,
+          options: { temperature: 0.1 }
+        })
+      });
+
+      if (!ollamaRes.ok) {
+        const errText = await ollamaRes.text();
+        throw new Error(`Ollama API error (${ollamaRes.status}): ${errText}`);
+      }
+
+      const ollamaData: any = await ollamaRes.json();
+      const rawText = (ollamaData.response || "{}").trim();
+      const cleanedText = rawText.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/i, "").trim();
+      geminiResult = JSON.parse(cleanedText);
+    } else {
+      if (!apiKey) {
+        return res.status(400).json({
+          error: "No LLM provider configured. Set GEMINI_API_KEY for Google Gemini, or set LLM_PROVIDER=ollama and OLLAMA_BASE_URL=http://localhost:11434 for local offline Ollama."
+        });
+      }
+
+      const ai = new GoogleGenAI({ apiKey });
+      const documentPart = {
+        inlineData: {
+          data: file.buffer.toString("base64"),
+          mimeType: mimeType,
+        }
+      };
+
+      const callGeminiWithRetry = async (models: string[], reqOptions: any, maxRetries = 3) => {
+        let lastError: any = null;
+        for (const modelName of models) {
+          for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+              console.log(`[Gemini Request] Calling model=${modelName} (Attempt ${attempt}/${maxRetries})...`);
+              const res = await ai.models.generateContent({
+                ...reqOptions,
+                model: modelName,
+              });
+              if (res && res.text) {
+                return res;
               }
-            },
-            required: [
-              "companyName",
-              "revenue",
-              "headcount",
-              "digitalTools",
-              "confidence",
-              "thoughtProcess",
-              "extractedJustifications",
-              "digitalMaturityLevel",
-              "recommendations",
-              "qualitativeAnalysis"
-            ]
+            } catch (err: any) {
+              lastError = err;
+              console.warn(`[Gemini Retry Warning] Model ${modelName} attempt ${attempt} failed: ${err.message}`);
+              if (attempt < maxRetries) {
+                const backoffMs = attempt * 1500;
+                await new Promise((resolve) => setTimeout(resolve, backoffMs));
+              }
+            }
           }
         }
+        throw lastError || new Error("All Gemini model attempts failed.");
+      };
+
+      const response = await callGeminiWithRetry(
+        ["gemini-3.6-flash", "gemini-flash-latest", "gemini-2.5-flash", "gemini-1.5-flash"],
+        {
+          contents: [documentPart, promptText],
+          config: {
+            temperature: 0,
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                companyName: { type: Type.STRING },
+                revenue: { type: Type.NUMBER },
+                headcount: { type: Type.INTEGER },
+                cogs: { type: Type.NUMBER },
+                payroll: { type: Type.NUMBER },
+                grossMargin: { type: Type.NUMBER },
+                operatingMargin: { type: Type.NUMBER },
+                currentAssets: { type: Type.NUMBER },
+                currentLiabilities: { type: Type.NUMBER },
+                digitalTools: { type: Type.ARRAY, items: { type: Type.STRING } },
+                confidence: { type: Type.NUMBER },
+                thoughtProcess: { type: Type.STRING },
+                extractedJustifications: { type: Type.STRING },
+                digitalMaturityLevel: { type: Type.STRING },
+                recommendations: { type: Type.ARRAY, items: { type: Type.STRING } },
+                qualitativeAnalysis: { type: Type.STRING }
+              },
+              required: [
+                "companyName", "revenue", "headcount", "digitalTools", "confidence",
+                "thoughtProcess", "extractedJustifications", "digitalMaturityLevel",
+                "recommendations", "qualitativeAnalysis"
+              ]
+            }
+          }
+        }
+      );
+
+      if (!response.text) {
+        throw new Error("Empty response from Gemini assessment engine.");
       }
-    );
 
-    if (!response.text) {
-      throw new Error("Empty response from Gemini assessment engine.");
+      const rawText = response.text.trim();
+      const cleanedText = rawText.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/i, "").trim();
+      geminiResult = JSON.parse(cleanedText);
     }
-
-    const rawText = response.text.trim();
-    const cleanedText = rawText.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/i, "").trim();
-    const geminiResult = JSON.parse(cleanedText);
 
     // Merge custom name if provided
     const companyName = customCompanyName || geminiResult.companyName || "SME Enterprise";

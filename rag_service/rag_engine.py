@@ -2,6 +2,7 @@ import os
 import io
 import math
 import logging
+import requests
 from typing import List, Dict, Any, Optional
 import numpy as np
 from pypdf import PdfReader
@@ -13,12 +14,16 @@ logger = logging.getLogger("rag_engine")
 
 class RAGEngine:
     def __init__(self):
+        self.provider = os.environ.get("LLM_PROVIDER", "").lower()
+        self.ollama_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
+        self.ollama_model = os.environ.get("OLLAMA_MODEL", "llama3")
+
         self.api_key = os.environ.get("GEMINI_API_KEY")
         if self.api_key:
             self.client = genai.Client(api_key=self.api_key)
         else:
             self.client = None
-            logger.warning("GEMINI_API_KEY not set in environment.")
+            logger.info("GEMINI_API_KEY not set in environment.")
 
         # In-memory vector store structure:
         # { doc_id: [{ "id": str, "text": str, "page": int, "embedding": np.ndarray }] }
@@ -193,8 +198,29 @@ class RAGEngine:
 
         user_prompt = f"Document Context:\n{context_str}\n\nQuestion: {question}"
 
+        use_ollama = self.provider == "ollama" or (not self.client and self.ollama_url)
+
         answer = ""
-        if self.client:
+        if use_ollama:
+            try:
+                logger.info(f"Querying local Ollama model '{self.ollama_model}' at {self.ollama_url}...")
+                resp = requests.post(
+                    f"{self.ollama_url}/api/generate",
+                    json={
+                        "model": self.ollama_model,
+                        "system": system_prompt,
+                        "prompt": user_prompt,
+                        "stream": False,
+                        "options": {"temperature": 0.2}
+                    },
+                    timeout=60
+                )
+                if resp.status_code == 200:
+                    answer = resp.json().get("response", "")
+            except Exception as e:
+                logger.warning(f"Ollama query failed: {e}")
+
+        if not answer and self.client:
             models_to_try = ["gemini-3.6-flash", "gemini-flash-latest"]
             for model_name in models_to_try:
                 for attempt in range(1, 4):
@@ -218,9 +244,7 @@ class RAGEngine:
                 if answer:
                     break
 
-            if not answer:
-                answer = f"Retrieved relevant context snippets on pages {', '.join(set(str(c['page']) for c in relevant_chunks))}, but Gemini AI model is currently busy. Please try asking again shortly."
-        else:
+        if not answer:
             answer = "RAG context retrieved successfully:\n\n" + "\n".join([f"• Page {c['page']}: {c['text'][:150]}..." for c in relevant_chunks])
 
         return {
