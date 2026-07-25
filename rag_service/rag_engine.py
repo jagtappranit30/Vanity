@@ -81,19 +81,29 @@ class RAGEngine:
         return chunks
 
     def _get_embedding(self, text: str) -> np.ndarray:
-        """Generates embedding vector using Gemini text-embedding-004 or fallback vector."""
+        """Generates embedding vector using a Gemini embedding model or fallback vector.
+
+        NOTE: The google-genai SDK routes embed_content() through batchEmbedContents.
+        text-embedding-004 does NOT support batchEmbedContents in v1beta — use
+        gemini-embedding-001 instead, which does.
+        """
+        EMBEDDING_MODELS = ["gemini-embedding-001", "text-embedding-004"]
         if self.client:
-            try:
-                response = self.client.models.embed_content(
-                    model="text-embedding-004",
-                    contents=text
-                )
-                if response.embedding and response.embedding.values:
-                    vec = np.array(response.embedding.values, dtype=np.float32)
-                    norm = np.linalg.norm(vec)
-                    return vec / (norm + 1e-10)
-            except Exception as e:
-                logger.warning(f"Gemini embedding API failed: {e}. Falling back to hash feature vector.")
+            for model_name in EMBEDDING_MODELS:
+                try:
+                    response = self.client.models.embed_content(
+                        model=model_name,
+                        contents=text
+                    )
+                    if response.embedding and response.embedding.values:
+                        vec = np.array(response.embedding.values, dtype=np.float32)
+                        norm = np.linalg.norm(vec)
+                        return vec / (norm + 1e-10)
+                    # model responded but returned no values — try next
+                except Exception as e:
+                    logger.warning(
+                        f"Embedding failed with model '{model_name}': {e}. Trying next model."
+                    )
 
         # Deterministic lightweight hash fallback vector (128 dims)
         vec = np.zeros(128, dtype=np.float32)

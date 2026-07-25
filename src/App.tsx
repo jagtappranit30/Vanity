@@ -22,7 +22,27 @@ export default function App() {
   const [processingCompanyName, setProcessingCompanyName] = useState("");
   const [processingSector, setProcessingSector] = useState("");
   const [processingError, setProcessingError] = useState<string | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
   const [showInfoModal, setShowInfoModal] = useState(false);
+
+  const handleSignInWithGoogle = async () => {
+    setAuthError(null);
+    try {
+      await signInWithGoogle();
+    } catch (err: any) {
+      console.error("Google sign-in error:", err);
+      const code = err?.code || "";
+      if (code === "auth/unauthorized-domain") {
+        setAuthError("Domain not authorized in Firebase Auth Console. Click 'Direct Access (Guest Mode)' below to bypass.");
+      } else if (code === "auth/popup-blocked") {
+        setAuthError("Sign-in popup blocked by browser. Click 'Direct Access (Guest Mode)' below to bypass.");
+      } else if (code === "auth/popup-closed-by-user") {
+        setAuthError("Sign-in popup closed before completing.");
+      } else {
+        setAuthError(err?.message || "Sign-in failed. Use 'Direct Access (Guest Mode)' to enter immediately.");
+      }
+    }
+  };
 
   const handleEnterAsGuest = () => {
     localStorage.setItem("vantly_guest_mode", "true");
@@ -202,7 +222,7 @@ export default function App() {
               <VantlyLogo className="w-10 h-10" />
               <div>
                 <span className="block font-display font-black text-base tracking-tight text-zinc-950 dark:text-white">
-                  Vantly AI
+                  Vantly
                 </span>
                 <span className="block text-[9px] font-extrabold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest leading-none mt-1">
                   See your business clearly
@@ -315,8 +335,14 @@ export default function App() {
               </div>
 
               <div className="w-full space-y-3 my-6">
+                {authError && (
+                  <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 rounded-xl text-left flex items-start gap-2 text-2xs text-rose-600 dark:text-rose-400">
+                    <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>{authError}</span>
+                  </div>
+                )}
                 <button
-                  onClick={signInWithGoogle}
+                  onClick={handleSignInWithGoogle}
                   className="w-full py-3.5 px-6 bg-zinc-900 dark:bg-zinc-800 hover:bg-zinc-850 dark:hover:bg-zinc-700 text-white font-bold text-xs rounded-2xl flex items-center justify-center gap-3 shadow-md hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer border border-transparent dark:border-zinc-700"
                 >
                   <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
@@ -401,7 +427,7 @@ export default function App() {
             <VantlyLogo className="w-10 h-10" />
             <div>
               <span className="block font-display font-black text-base tracking-tight text-zinc-950 dark:text-white">
-                Vantly AI
+                Vantly
               </span>
               <span className="block text-4xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest leading-none mt-1">
                 See your business clearly

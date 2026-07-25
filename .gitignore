@@ -8,3 +8,5 @@ coverage/
 !.env.example
 .git_backup/
 rag_service/venv/
+eval/.venv/
+

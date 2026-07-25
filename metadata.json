@@ -1,8 +1,6 @@
 {
-  "name": "Vantly AI",
-  "description": "Vantly - See your business clearly. An AI-powered full-stack platform that assesses Small-to-Medium Enterprise (SME) productivity by analyzing financial documents (PDFs/CSVs) and comparing performance against sector benchmarks.",
+  "name": "Vantly",
+  "description": "Vantly - See your business clearly. A full-stack platform that assesses Small-to-Medium Enterprise (SME) productivity by analyzing financial documents (PDFs/CSVs) and comparing performance against sector benchmarks.",
   "requestFramePermissions": [],
-  "majorCapabilities": [
-    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
-  ]
+  "majorCapabilities": []
 }

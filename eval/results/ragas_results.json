@@ -1,0 +1,30 @@
+{
+  "faithfulness": {
+    "mean": null,
+    "std": null,
+    "min": null,
+    "max": null,
+    "runs": 0
+  },
+  "context_precision": {
+    "mean": null,
+    "std": null,
+    "min": null,
+    "max": null,
+    "runs": 0
+  },
+  "context_recall": {
+    "mean": null,
+    "std": null,
+    "min": null,
+    "max": null,
+    "runs": 0
+  },
+  "answer_relevancy": {
+    "mean": null,
+    "std": null,
+    "min": null,
+    "max": null,
+    "runs": 0
+  }
+}

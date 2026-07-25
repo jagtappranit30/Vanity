@@ -801,7 +801,7 @@ export default function ResultsDashboard({
                 </div>
               </div>
               <p className="text-xs text-zinc-600 dark:text-zinc-350 leading-relaxed font-semibold">
-                To prevent artificial intelligence hallucinations, Vantly AI operates on a strict <strong className="text-indigo-600 dark:text-indigo-400 font-extrabold">Direct-Evidence constraint</strong>. If a financial metric is not explicitly stated in your uploaded accounts or mathematically derivable with absolute certainty, the system returns <code className="px-1 py-0.5 rounded bg-zinc-100 dark:bg-zinc-850 font-mono font-bold text-[10px]">null (N/A)</code> rather than guessing or interpolating.
+                To maintain analytical precision and rigor, Vantly operates on a strict <strong className="text-indigo-600 dark:text-indigo-400 font-extrabold">Direct-Evidence constraint</strong>. If a financial metric is not explicitly stated in your uploaded accounts or mathematically derivable with absolute certainty, the system returns <code className="px-1 py-0.5 rounded bg-zinc-100 dark:bg-zinc-850 font-mono font-bold text-[10px]">null (N/A)</code> rather than guessing or interpolating.
               </p>
               
               {/* Checkbox status checklist */}

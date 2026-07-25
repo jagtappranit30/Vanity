@@ -424,18 +424,13 @@ app.post("/api/assess", optionalAuth, upload.single("file"), async (req: AuthReq
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       return res.status(400).json({
-        error: "GEMINI_API_KEY environment variable is not configured. Please open the Settings > Secrets menu in AI Studio and define your Gemini API Key."
+        error: "GEMINI_API_KEY environment variable is not configured. Please define GEMINI_API_KEY in your environment variables."
       });
     }
 
     // Initialize Gemini API client inside handler for lazy initialization
     const ai = new GoogleGenAI({
       apiKey,
-      httpOptions: {
-        headers: {
-          "User-Agent": "aistudio-build",
-        }
-      }
     });
 
     let mimeType = isPDF ? "application/pdf" : "text/csv";
