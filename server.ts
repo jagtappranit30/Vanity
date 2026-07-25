@@ -524,6 +524,28 @@ Your task is to:
 
 You must return the result as a single JSON object matching the requested schema exactly.`;
 
+function extractJSONObject(rawText: string): any {
+  const cleaned = rawText.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/i, "").trim();
+  try {
+    return JSON.parse(cleaned);
+  } catch (e1) {
+    const firstBrace = cleaned.indexOf("{");
+    const lastBrace = cleaned.lastIndexOf("}");
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      const candidate = cleaned.slice(firstBrace, lastBrace + 1);
+      try {
+        return JSON.parse(candidate);
+      } catch (e2) {
+        const sanitized = candidate
+          .replace(/,\s*([}\]])/g, "$1")
+          .replace(/[\u0000-\u001F\u007F-\u009F]/g, " ");
+        return JSON.parse(sanitized);
+      }
+    }
+    throw e1;
+  }
+}
+
     const preferredProvider = llmConfig.provider;
 
     const tryOllama = async () => {
@@ -575,8 +597,7 @@ You MUST return ONLY a JSON object (no markdown, no backticks, no codeblocks) wi
 
       const data: any = await res.json();
       const rawText = (data.response || "{}").trim();
-      const cleanedText = rawText.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/i, "").trim();
-      return JSON.parse(cleanedText);
+      return extractJSONObject(rawText);
     };
 
     const tryGemini = async () => {
