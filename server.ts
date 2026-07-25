@@ -511,7 +511,7 @@ You must return the result as a single JSON object matching the requested schema
     };
 
     const response = await callGeminiWithRetry(
-      ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-1.5-flash", "gemini-1.5-pro"],
+      ["gemini-3.6-flash", "gemini-flash-latest", "gemini-2.5-flash", "gemini-1.5-flash"],
       {
         contents: [documentPart, promptText],
         config: {

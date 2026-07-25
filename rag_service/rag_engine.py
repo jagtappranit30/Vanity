@@ -185,7 +185,7 @@ class RAGEngine:
 
         answer = ""
         if self.client:
-            models_to_try = ["gemini-2.5-flash", "gemini-1.5-flash"]
+            models_to_try = ["gemini-3.6-flash", "gemini-flash-latest"]
             for model_name in models_to_try:
                 for attempt in range(1, 4):
                     try:
