@@ -426,7 +426,7 @@ async function extractTextForOllama(buffer: Buffer, originalName: string, isPDF:
     form.append("file", buffer, { filename: originalName || "document.pdf" });
     const extractRes = await fetch("http://127.0.0.1:8000/extract", {
       method: "POST",
-      body: form as any,
+      body: form.getBuffer(),
       headers: form.getHeaders(),
     });
     if (extractRes.ok) {
