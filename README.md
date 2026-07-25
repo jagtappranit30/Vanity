@@ -11,6 +11,7 @@
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-4169E1?style=flat-square&logo=postgresql)](https://www.postgresql.org)
 [![Firebase](https://img.shields.io/badge/Firebase-Auth-FFCA28?style=flat-square&logo=firebase)](https://firebase.google.com)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker)](https://www.docker.com)
+[![CI/CD Pipeline](https://github.com/jagtappranit30/Vanity/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/jagtappranit30/Vanity/actions)
 
 > **Vantly** is a full-stack financial health & productivity assessment platform designed for SMEs. Upload a financial document (PDF or CSV), choose your industry sector, and receive an in-depth automated analysis covering labour efficiency, financial health, digital maturity, and benchmarked sector comparisons.
 
