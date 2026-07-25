@@ -436,11 +436,55 @@ function extractTextForOllama(buffer: Buffer, isPDF: boolean): string {
   return buffer.toString("utf-8").replace(/[^\x20-\x7E\n\r\t]/g, " ");
 }
 
-    const provider = (process.env.LLM_PROVIDER || "").toLowerCase();
-    const apiKey = process.env.GEMINI_API_KEY;
-    const ollamaUrl = process.env.OLLAMA_BASE_URL || (provider === "ollama" ? "http://localhost:11434" : undefined);
-    const ollamaModel = process.env.OLLAMA_MODEL || "llama3";
-    const useOllama = provider === "ollama" || (!apiKey && ollamaUrl);
+interface TaskLLMConfig {
+  provider: "gemini" | "ollama";
+  model: string;
+  ollamaUrl?: string;
+  geminiApiKey?: string;
+}
+
+// Multi-LLM Router by Use Case
+function resolveTaskLLM(task: "assessment" | "rag" | "strategy"): TaskLLMConfig {
+  const globalProvider = (process.env.LLM_PROVIDER || "").toLowerCase();
+  const geminiApiKey = process.env.GEMINI_API_KEY;
+  const ollamaUrl = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
+
+  const taskEnvPrefix = task.toUpperCase();
+  const taskProvider = process.env[`${taskEnvPrefix}_LLM_PROVIDER`]?.toLowerCase() || globalProvider;
+
+  let provider: "gemini" | "ollama" = "gemini";
+  if (taskProvider === "ollama") {
+    provider = "ollama";
+  } else if (taskProvider === "gemini") {
+    provider = "gemini";
+  } else if (!geminiApiKey && ollamaUrl) {
+    provider = "ollama";
+  }
+
+  let model = process.env[`${taskEnvPrefix}_MODEL`];
+  if (!model) {
+    if (provider === "gemini") {
+      model = task === "assessment" ? "gemini-3.6-flash" : task === "rag" ? "gemini-2.5-flash" : "gemini-3.6-flash";
+    } else {
+      model = process.env.OLLAMA_MODEL || "llama3";
+    }
+  }
+
+  return {
+    provider,
+    model,
+    ollamaUrl,
+    geminiApiKey,
+  };
+}
+
+    const llmConfig = resolveTaskLLM("assessment");
+    console.log(`[Multi-LLM Router] Task: Financial Assessment | Provider: ${llmConfig.provider.toUpperCase()} | Model: ${llmConfig.model}`);
+
+    const useOllama = llmConfig.provider === "ollama";
+    const apiKey = llmConfig.geminiApiKey;
+    const ollamaUrl = llmConfig.ollamaUrl;
+    const ollamaModel = llmConfig.model;
 
     let geminiResult: any = null;
 

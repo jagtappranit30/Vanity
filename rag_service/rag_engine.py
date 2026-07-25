@@ -170,8 +170,30 @@ class RAGEngine:
             for item in top_results
         ]
 
-    def query(self, doc_id: str, question: str, top_k: int = 4) -> Dict[str, Any]:
-        """RAG query pipeline: retrieves context chunks and synthesizes answer using Gemini."""
+    def resolve_task_llm(self, task: str = "rag"):
+        global_provider = os.environ.get("LLM_PROVIDER", "").lower()
+        task_env_prefix = task.upper()
+        task_provider = os.environ.get(f"{task_env_prefix}_LLM_PROVIDER", "").lower() or global_provider
+        gemini_key = os.environ.get("GEMINI_API_KEY")
+        ollama_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
+
+        provider = "gemini"
+        if task_provider == "ollama" or (not gemini_key and ollama_url):
+            provider = "ollama"
+        elif task_provider == "gemini":
+            provider = "gemini"
+
+        model = os.environ.get(f"{task_env_prefix}_MODEL")
+        if not model:
+            if provider == "gemini":
+                model = "gemini-2.5-flash"
+            else:
+                model = os.environ.get("OLLAMA_MODEL", "llama3")
+
+        return provider, model, ollama_url, gemini_key
+
+    def query(self, doc_id: str, question: str, top_k: int = 5) -> Dict[str, Any]:
+        """Queries the vector index using the configured multi-LLM task router."""
         relevant_chunks = self.search_similar_chunks(doc_id, question, top_k=top_k)
 
         if not relevant_chunks:
@@ -187,7 +209,7 @@ class RAGEngine:
         ])
 
         system_prompt = (
-            "You are Vantly AI's Financial RAG Assistant. Your job is to answer user questions about "
+            "You are Vantly's Financial Document Assistant. Your job is to answer user questions about "
             "financial statements using ONLY the provided document context snippets.\n"
             "STRICT RULES:\n"
             "1. Base your answer strictly on the provided context snippets.\n"
@@ -198,16 +220,17 @@ class RAGEngine:
 
         user_prompt = f"Document Context:\n{context_str}\n\nQuestion: {question}"
 
-        use_ollama = self.provider == "ollama" or (not self.client and self.ollama_url)
+        provider, model_name, ollama_url, gemini_key = self.resolve_task_llm("rag")
+        logger.info(f"[Multi-LLM Router] Task: Vector RAG Q&A | Provider: {provider.upper()} | Model: {model_name}")
 
         answer = ""
-        if use_ollama:
+        if provider == "ollama":
             try:
-                logger.info(f"Querying local Ollama model '{self.ollama_model}' at {self.ollama_url}...")
+                logger.info(f"Querying local Ollama model '{model_name}' at {ollama_url}...")
                 resp = requests.post(
-                    f"{self.ollama_url}/api/generate",
+                    f"{ollama_url}/api/generate",
                     json={
-                        "model": self.ollama_model,
+                        "model": model_name,
                         "system": system_prompt,
                         "prompt": user_prompt,
                         "stream": False,
@@ -221,12 +244,12 @@ class RAGEngine:
                 logger.warning(f"Ollama query failed: {e}")
 
         if not answer and self.client:
-            models_to_try = ["gemini-3.6-flash", "gemini-flash-latest"]
-            for model_name in models_to_try:
+            models_to_try = [model_name, "gemini-3.6-flash", "gemini-flash-latest"]
+            for m in models_to_try:
                 for attempt in range(1, 4):
                     try:
                         response = self.client.models.generate_content(
-                            model=model_name,
+                            model=m,
                             contents=user_prompt,
                             config=types.GenerateContentConfig(
                                 system_instruction=system_prompt,
@@ -237,7 +260,7 @@ class RAGEngine:
                             answer = response.text
                             break
                     except Exception as e:
-                        logger.warning(f"RAG query error with model {model_name} (attempt {attempt}): {e}")
+                        logger.warning(f"RAG query error with model {m} (attempt {attempt}): {e}")
                         if attempt < 3:
                             import time
                             time.sleep(1.5 * attempt)
