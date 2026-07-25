@@ -607,7 +607,7 @@ You MUST return ONLY a JSON object (no markdown, no backticks, no codeblocks) wi
           format: "json",
           stream: false,
           keep_alive: "10m",
-          options: { temperature: 0.1, num_ctx: 8192 }
+          options: { temperature: 0.0, seed: 42, top_p: 1.0, num_ctx: 8192 }
         })
       });
 
@@ -678,6 +678,46 @@ You MUST return ONLY a JSON object (no markdown, no backticks, no codeblocks) wi
       return JSON.parse(cleanedText);
     };
 
+// Deterministic pre-parsing helper for CSV financial tables & key-value files
+function preParseCSVMetrics(text: string): Partial<FinancialMetrics> {
+  const result: Partial<FinancialMetrics> = {};
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+
+  if (lines.length >= 2 && lines[0].includes(",")) {
+    const headers = lines[0].split(",").map(h => h.trim().toLowerCase());
+    const values = lines[1].split(",").map(v => v.trim());
+
+    headers.forEach((h, i) => {
+      const valStr = values[i];
+      if (!valStr) return;
+      const num = parseFloat(valStr.replace(/[^0-9.-]/g, ""));
+      if (h.includes("company")) result.companyName = valStr.replace(/['"]/g, "");
+      if (h.includes("revenue") || h.includes("turnover") || h.includes("sales")) if (!isNaN(num)) result.revenue = num;
+      if (h.includes("headcount") || h.includes("employees") || h.includes("staff")) if (!isNaN(num)) result.headcount = Math.round(num);
+      if (h.includes("cogs") || h.includes("cost of sales") || h.includes("direct cost")) if (!isNaN(num)) result.cogs = num;
+      if (h.includes("payroll") || h.includes("wages") || h.includes("salaries")) if (!isNaN(num)) result.payroll = num;
+      if (h.includes("current assets") || h.includes("assets")) if (!isNaN(num)) result.currentAssets = num;
+      if (h.includes("current liabilities") || h.includes("liabilities")) if (!isNaN(num)) result.currentLiabilities = num;
+    });
+  }
+
+  for (const line of lines) {
+    const parts = line.split(/[:,\t]/);
+    if (parts.length >= 2) {
+      const key = parts[0].trim().toLowerCase();
+      const num = parseFloat(parts[1].trim().replace(/[^0-9.-]/g, ""));
+      if (!isNaN(num)) {
+        if (key === "revenue" || key === "turnover" || key === "total sales") result.revenue = result.revenue ?? num;
+        if (key === "headcount" || key === "employees" || key === "staff count") result.headcount = result.headcount ?? Math.round(num);
+        if (key === "cogs" || key === "cost of sales") result.cogs = result.cogs ?? num;
+        if (key === "payroll" || key === "wages") result.payroll = result.payroll ?? num;
+      }
+    }
+  }
+
+  return result;
+}
+
     if (preferredProvider === "ollama") {
       try {
         geminiResult = await tryOllama();
@@ -702,26 +742,51 @@ You MUST return ONLY a JSON object (no markdown, no backticks, no codeblocks) wi
       }
     }
 
-    // Merge custom name if provided
-    const companyName = customCompanyName || geminiResult.companyName || "SME Enterprise";
+    // Pre-parse CSV for exact numerical values if available
+    const preParsed = isCSV ? preParseCSVMetrics(file.buffer.toString("utf-8")) : {};
+
+    // Override LLM output with exact pre-parsed metrics whenever present for 100% consistency
+    const rev = preParsed.revenue ?? geminiResult.revenue ?? null;
+    const hc = preParsed.headcount ?? geminiResult.headcount ?? null;
+    const cogsVal = preParsed.cogs ?? geminiResult.cogs ?? null;
+    const pay = preParsed.payroll ?? geminiResult.payroll ?? null;
+    const ca = preParsed.currentAssets ?? geminiResult.currentAssets ?? null;
+    const cl = preParsed.currentLiabilities ?? geminiResult.currentLiabilities ?? null;
+
+    // Calculate margins deterministically
+    let grossM: number | null = null;
+    if (rev !== null && cogsVal !== null && rev > 0) {
+      grossM = Math.round(((rev - cogsVal) / rev) * 100 * 10) / 10;
+    } else if (geminiResult.grossMargin != null) {
+      grossM = Math.round(geminiResult.grossMargin * 10) / 10;
+    }
+
+    let opM: number | null = null;
+    if (rev !== null && pay !== null && rev > 0) {
+      opM = Math.round(((rev - (cogsVal || 0) - pay) / rev) * 100 * 10) / 10;
+    } else if (geminiResult.operatingMargin != null) {
+      opM = Math.round(geminiResult.operatingMargin * 10) / 10;
+    }
+
+    const companyName = customCompanyName || preParsed.companyName || geminiResult.companyName || "SME Enterprise";
 
     const metrics: FinancialMetrics = {
       companyName,
-      revenue: geminiResult.revenue,
-      headcount: geminiResult.headcount,
-      cogs: geminiResult.cogs,
-      payroll: geminiResult.payroll,
-      grossMargin: geminiResult.grossMargin,
-      operatingMargin: geminiResult.operatingMargin,
-      currentAssets: geminiResult.currentAssets,
-      currentLiabilities: geminiResult.currentLiabilities,
+      revenue: rev,
+      headcount: hc,
+      cogs: cogsVal,
+      payroll: pay,
+      grossMargin: grossM,
+      operatingMargin: opM,
+      currentAssets: ca,
+      currentLiabilities: cl,
       digitalTools: geminiResult.digitalTools || [],
       confidence: geminiResult.confidence || 85,
-      extractedJustifications: geminiResult.extractedJustifications || "Extracted using general ledger analysis."
+      extractedJustifications: geminiResult.extractedJustifications || "Extracted using deterministic general ledger analysis."
     };
 
-    // Run scoring engine against benchmarks
-    const { scores, benchmarks } = calculateScores(geminiResult, sector);
+    // Run scoring engine against benchmarks deterministically
+    const { scores, benchmarks } = calculateScores(metrics, sector);
 
     // Save assessment run to Cloud SQL database linked to authenticated user (if signed in)
     const id = Math.random().toString(36).substring(2, 11);
