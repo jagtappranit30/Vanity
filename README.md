@@ -242,7 +242,7 @@ GEMINI_API_KEY=your-api-key-here
 
 # ── Local Offline LLM (Ollama) ─────────────────────────────
 OLLAMA_BASE_URL=http://localhost:11434  # inside Docker: http://host.docker.internal:11434
-OLLAMA_MODEL=llama3                    # Model installed via `ollama pull llama3`
+OLLAMA_MODEL=gpt-oss                   # Model installed via `ollama pull gpt-oss`
 
 # ── Database (Local Dev) ──────────────────────────────────
 SQL_HOST=localhost

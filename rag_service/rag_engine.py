@@ -251,7 +251,7 @@ class RAGEngine:
                 logger.warning(f"Ollama query failed: {e}")
 
         if not answer and self.client:
-            models_to_try = [model_name, "gemini-3.6-flash", "gemini-2.0-flash"]
+            models_to_try = [model_name, "gemini-3.6-flash"]
             for m in models_to_try:
                 for attempt in range(1, 4):
                     try:
