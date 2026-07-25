@@ -455,6 +455,7 @@ app.post("/api/assess", optionalAuth, upload.single("file"), async (req: AuthReq
 Analyze the attached financial statement (which is a ${isPDF ? "PDF" : "CSV"} document) for an SME in the '${sector}' sector.
 
 CRITICAL ANTI-HALLUCINATION INSTRUCTIONS:
+- In the "thoughtProcess" string, you MUST first perform step-by-step reasoning. Write down each metric you need to find, look for it, write down where it is, and verify the math before outputting any final number.
 - You must ONLY extract numbers that are explicitly written in the attached text, or directly derivable from them with 100% mathematical certainty.
 - NEVER guess, approximate, estimate, or extrapolate any of these metrics: revenue, headcount, cogs, payroll, grossMargin, operatingMargin, currentAssets, currentLiabilities.
 - Micro-entity accounts in the UK or other regions frequently do NOT disclose headcount or payroll values. If headcount or payroll is not explicitly written in the document, you MUST return null. NEVER guess headcount based on company size or turnover.
@@ -464,7 +465,8 @@ CRITICAL ANTI-HALLUCINATION INSTRUCTIONS:
 - Do NOT list hypothetical software tools in "digitalTools" simply because they are common in the industry; only list tools explicitly named or directly referred to in the document.
 
 Your task is to:
-1. Extract key financial metrics with highest precision. If a metric is not mentioned or cannot be calculated, use null.
+1. First, reason and double-check all metrics inside the "thoughtProcess" block.
+2. Extract key financial metrics with highest precision. If a metric is not mentioned or cannot be calculated, use null.
    - revenue: annual total sales/revenue.
    - headcount: total number of employees.
    - cogs: Cost of Goods Sold or Cost of Sales.
@@ -473,10 +475,10 @@ Your task is to:
    - operatingMargin: Operating profit margin percentage (0-100).
    - currentAssets: Current Assets from Balance sheet.
    - currentLiabilities: Current Liabilities from Balance sheet.
-2. Scan for mentions of software systems, bookkeeping packages, digital ERP/CRM tools (e.g. QuickBooks, Xero, Sage, SAP, Excel).
-3. Classify their digital maturity level as exactly 'Low', 'Medium', or 'High' based on these tools and process automation clues.
-4. Formulate 3 to 5 highly practical, specific productivity improvement suggestions tailored to this specific firm's metrics.
-5. Provide a crisp qualitative summary analyzing their bottlenecks and potential growth pathways.
+3. Scan for mentions of software systems, bookkeeping packages, digital ERP/CRM tools (e.g. QuickBooks, Xero, Sage, SAP, Excel).
+4. Classify their digital maturity level as exactly 'Low', 'Medium', or 'High' based on these tools and process automation clues.
+5. Formulate 3 to 5 highly practical, specific productivity improvement suggestions tailored to this specific firm's metrics.
+6. Provide a crisp qualitative summary analyzing their bottlenecks and potential growth pathways.
 
 You must return the result as a single JSON object matching the requested schema exactly.`;
 
@@ -509,7 +511,7 @@ You must return the result as a single JSON object matching the requested schema
     };
 
     const response = await callGeminiWithRetry(
-      ["gemini-3.6-flash", "gemini-flash-latest", "gemini-3.1-pro-preview"],
+      ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-1.5-flash", "gemini-1.5-pro"],
       {
         contents: [documentPart, promptText],
         config: {
@@ -563,6 +565,10 @@ You must return the result as a single JSON object matching the requested schema
                 type: Type.NUMBER,
                 description: "Precision confidence score of extraction from 0 to 100."
               },
+              thoughtProcess: {
+                type: Type.STRING,
+                description: "Chain of thought: Detail step-by-step extraction analysis and verification of metrics."
+              },
               extractedJustifications: {
                 type: Type.STRING,
                 description: "Short notes on where numbers were found (e.g., 'Revenue from Page 3 Income Statement, Headcount from Note 5')."
@@ -587,6 +593,7 @@ You must return the result as a single JSON object matching the requested schema
               "headcount",
               "digitalTools",
               "confidence",
+              "thoughtProcess",
               "extractedJustifications",
               "digitalMaturityLevel",
               "recommendations",
