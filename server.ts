@@ -491,8 +491,6 @@ function resolveTaskLLM(task: "assessment" | "rag" | "strategy"): TaskLLMConfig 
     const ollamaUrl = llmConfig.ollamaUrl;
     const ollamaModel = llmConfig.model;
 
-    let llmResult: any = null;
-
     let mimeType = isPDF ? "application/pdf" : "text/csv";
     if (isCSV && !file.mimetype.includes("csv")) {
       mimeType = "text/plain"; // fallback for CSV content representation
