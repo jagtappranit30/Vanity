@@ -13,7 +13,7 @@ logger = logging.getLogger("rag_engine")
 class RAGEngine:
     def __init__(self):
         self.ollama_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
-        self.ollama_model = os.environ.get("OLLAMA_MODEL", "gpt-oss")
+        self.ollama_model = os.environ.get("OLLAMA_MODEL", "qwen2.5:7b")
 
         # In-memory vector store structure:
         # { doc_id: [{ "id": str, "text": str, "page": int, "embedding": np.ndarray }] }
@@ -162,7 +162,7 @@ class RAGEngine:
         ]
 
     def query(self, doc_id: str, question: str, top_k: int = 5) -> Dict[str, Any]:
-        """Queries the vector index using local Ollama gpt-oss model."""
+        """Queries the vector index using local Ollama qwen2.5:7b model."""
         relevant_chunks = self.search_similar_chunks(doc_id, question, top_k=top_k)
 
         if not relevant_chunks:

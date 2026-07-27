@@ -234,7 +234,7 @@ def run_evaluation(args: argparse.Namespace) -> None:
             console.print(f"[red]✗ RAG service returned HTTP {e.response.status_code}[/red]")
             sys.exit(1)
 
-        ollama_model = health.get("ollama_model", "gpt-oss")
+        ollama_model = health.get("ollama_model", "qwen2.5:7b")
         docs_indexed = health.get("indexed_documents_count", 0)
         console.print(
             f"[green]✓[/green] Service healthy | LLM: Ollama ({ollama_model}) | "

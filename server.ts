@@ -474,7 +474,7 @@ function resolveTaskLLM(task: "assessment" | "rag" | "strategy"): TaskLLMConfig 
 
   let model = process.env[`${taskEnvPrefix}_MODEL`];
   if (!model) {
-    model = process.env.OLLAMA_MODEL || "gpt-oss";
+    model = process.env.OLLAMA_MODEL || "qwen2.5:7b";
   }
 
   return {

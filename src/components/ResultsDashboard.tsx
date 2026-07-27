@@ -58,7 +58,7 @@ export default function ResultsDashboard({
   // Loading phase messages
   const LOADING_STEPS = [
     "Uploading financial statement to workspace server...",
-    "Initializing Ollama gpt-oss cognitive parsing...",
+    "Initializing Ollama Qwen 2.5 cognitive parsing...",
     "Scanning Balance Sheet & Profit & Loss statements...",
     "Extracting Revenue, COGS, and liquidity figures...",
     "Measuring labour productivity & payroll leverage...",
@@ -858,7 +858,7 @@ export default function ResultsDashboard({
                 {metrics.extractedJustifications}
               </p>
               <div className="flex items-center justify-between text-[10px] font-bold uppercase text-zinc-400 dark:text-zinc-550 mt-3.5">
-                <span>Extraction Engine: Ollama gpt-oss</span>
+                <span>Extraction Engine: Ollama Qwen 2.5</span>
                 <span>Trace Confidence: {metrics.confidence}%</span>
               </div>
             </div>

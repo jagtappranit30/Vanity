@@ -442,7 +442,7 @@ export function generateAssessmentPDF(assessment: AssessmentRun) {
   doc.text("Trace Logging Source:", marginX + 100, y + 6);
   doc.setFont("Helvetica", "normal");
   doc.setTextColor(51, 65, 85); // slate-700
-  doc.text("Ollama gpt-oss Core", marginX + 134, y + 6);
+  doc.text("Ollama Qwen 2.5 Core", marginX + 134, y + 6);
 
   y += 15;
 
