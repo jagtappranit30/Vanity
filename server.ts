@@ -530,7 +530,9 @@ Your task is to:
 You must return the result as a single JSON object matching the requested schema exactly.`;
 
 function extractJSONObject(rawText: string): any {
-  const cleaned = rawText.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/i, "").trim();
+  // Strip out reasoning / thinking blocks from thinking models (like gpt-oss, R1, o1)
+  let cleaned = rawText.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+  cleaned = cleaned.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/i, "").trim();
   try {
     return JSON.parse(cleaned);
   } catch (e1) {
@@ -541,13 +543,18 @@ function extractJSONObject(rawText: string): any {
       try {
         return JSON.parse(candidate);
       } catch (e2) {
-        const sanitized = candidate
-          .replace(/,\s*([}\]])/g, "$1")
-          .replace(/[\u0000-\u001F\u007F-\u009F]/g, " ");
-        return JSON.parse(sanitized);
+        try {
+          const sanitized = candidate
+            .replace(/,\s*([}\]])/g, "$1")
+            .replace(/[\u0000-\u001F\u007F-\u009F]/g, " ");
+          return JSON.parse(sanitized);
+        } catch (e3) {
+          // Fallback below
+        }
       }
     }
-    throw e1;
+    // Return empty object instead of throwing syntax error
+    return {};
   }
 }
 
@@ -583,17 +590,22 @@ You MUST return ONLY a JSON object (no markdown, no backticks, no codeblocks) wi
 `;
       const fullPrompt = `${promptText}\n\n${jsonFormatGuide}\n\nDOCUMENT TEXT CONTENT:\n${docText}`;
 
+      const isThinkingModel = ollamaModel.toLowerCase().includes("gpt-oss") || ollamaModel.toLowerCase().includes("r1") || ollamaModel.toLowerCase().includes("qwen") || ollamaModel.toLowerCase().includes("reason");
+      const requestBody: any = {
+        model: ollamaModel,
+        prompt: fullPrompt,
+        stream: false,
+        keep_alive: "10m",
+        options: { temperature: 0.0, seed: 42, top_p: 1.0, num_ctx: 8192 }
+      };
+      if (!isThinkingModel) {
+        requestBody.format = "json";
+      }
+
       const res = await fetch(`${targetUrl}/api/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: ollamaModel,
-          prompt: fullPrompt,
-          format: "json",
-          stream: false,
-          keep_alive: "10m",
-          options: { temperature: 0.0, seed: 42, top_p: 1.0, num_ctx: 8192 }
-        })
+        body: JSON.stringify(requestBody)
       });
 
       if (!res.ok) {
@@ -608,15 +620,16 @@ You MUST return ONLY a JSON object (no markdown, no backticks, no codeblocks) wi
 
 
 
-// Deterministic pre-parsing helper for CSV financial tables & key-value files
-function preParseCSVMetrics(text: string): Partial<FinancialMetrics> {
+// Universal deterministic pre-parsing helper for CSV tables, PDF extracts, and plain text reports
+function preParseUniversalMetrics(text: string, fileName?: string): Partial<FinancialMetrics> {
   const result: Partial<FinancialMetrics> = {};
-  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  if (!text) return result;
 
+  // Try parsing as CSV / Table first
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   if (lines.length >= 2 && lines[0].includes(",")) {
     const headers = lines[0].split(",").map(h => h.trim().toLowerCase());
     const values = lines[1].split(",").map(v => v.trim());
-
     headers.forEach((h, i) => {
       const valStr = values[i];
       if (!valStr) return;
@@ -631,27 +644,63 @@ function preParseCSVMetrics(text: string): Partial<FinancialMetrics> {
     });
   }
 
+  // Check line-by-line key: value or table rows
   for (const line of lines) {
     const parts = line.split(/[:,\t]/);
     if (parts.length >= 2) {
       const key = parts[0].trim().toLowerCase();
-      const num = parseFloat(parts[1].trim().replace(/[^0-9.-]/g, ""));
+      const valStr = parts.slice(1).join(" ").trim();
+      const num = parseFloat(valStr.replace(/[^0-9.-]/g, ""));
       if (!isNaN(num)) {
-        if (key === "revenue" || key === "turnover" || key === "total sales") result.revenue = result.revenue ?? num;
-        if (key === "headcount" || key === "employees" || key === "staff count") result.headcount = result.headcount ?? Math.round(num);
-        if (key === "cogs" || key === "cost of sales") result.cogs = result.cogs ?? num;
-        if (key === "payroll" || key === "wages") result.payroll = result.payroll ?? num;
+        if (key.includes("revenue") || key.includes("turnover") || key === "total sales") result.revenue = result.revenue ?? num;
+        if (key.includes("headcount") || key.includes("employees") || key.includes("staff count")) result.headcount = result.headcount ?? Math.round(num);
+        if (key.includes("cogs") || key.includes("cost of goods sold") || key.includes("cost of sales")) result.cogs = result.cogs ?? num;
+        if (key.includes("payroll") || key.includes("staff payroll") || key.includes("wages") || key.includes("salaries")) result.payroll = result.payroll ?? num;
+        if (key === "gross margin (%)" || key === "gross margin" || key === "gross profit margin (%)") result.grossMargin = result.grossMargin ?? num;
+        if (key === "operating margin (%)" || key === "operating margin") result.operatingMargin = result.operatingMargin ?? num;
+      }
+      if (key.includes("company") || key === "name") {
+        if (!result.companyName && valStr.length > 2) result.companyName = valStr.replace(/['"]/g, "");
       }
     }
+  }
+
+  // Regex fallback across entire text for paragraph statements (e.g. "headcount of 42", "Turnover: 4,200,000")
+  if (result.revenue == null) {
+    const revMatch = text.match(/(?:total\s+)?(?:revenue|turnover)\s*(?:\(turnover\))?\s*[:\-]?\s*£?\s*([0-9,]+(?:\.[0-9]+)?)/i);
+    if (revMatch) result.revenue = parseFloat(revMatch[1].replace(/,/g, ""));
+  }
+  if (result.headcount == null) {
+    const hcMatch = text.match(/(?:headcount|employed|employees|staff)(?: of| around| approx)?\s+(\d+)/i) || text.match(/(\d+)\s+(?:full-time equivalent|employees|staff)/i);
+    if (hcMatch) result.headcount = parseInt(hcMatch[1], 10);
+  }
+  if (result.cogs == null) {
+    const cogsMatch = text.match(/(?:cogs|cost of goods sold|cost of sales)\s*(?:\([a-z]+\))?\s*[:\-]?\s*£?\s*([0-9,]+(?:\.[0-9]+)?)/i);
+    if (cogsMatch) result.cogs = parseFloat(cogsMatch[1].replace(/,/g, ""));
+  }
+  if (result.payroll == null) {
+    const payMatch = text.match(/(?:payroll|wages|salaries|staff payroll & employer ni|staff costs)\s*[:\-]?\s*£?\s*([0-9,]+(?:\.[0-9]+)?)/i);
+    if (payMatch) result.payroll = parseFloat(payMatch[1].replace(/,/g, ""));
+  }
+  if (!result.companyName) {
+    const nameMatch = text.match(/^([A-Z0-9\s.,&'"-]+(?:LTD|LIMITED|LLP|INC|CORP|PLC|GROUP))/im);
+    if (nameMatch) result.companyName = nameMatch[1].trim();
+    else if (fileName) result.companyName = fileName.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ");
   }
 
   return result;
 }
 
-    llmResult = await tryOllama();
+    let llmResult: any = {};
+    try {
+      llmResult = await tryOllama();
+    } catch (err: any) {
+      console.warn(`[Assessment Engine] Ollama generation failed or timed out (${err.message}). Falling back to universal deterministic extraction.`);
+    }
 
-    // Pre-parse CSV for exact numerical values if available
-    const preParsed = isCSV ? preParseCSVMetrics(file.buffer.toString("utf-8")) : {};
+    // Extract raw text from file for universal deterministic pre-parsing
+    const docTextForParsing = file.buffer.toString("utf-8");
+    const preParsed = preParseUniversalMetrics(docTextForParsing, file.originalname);
 
     // Override LLM output with exact pre-parsed metrics whenever present for 100% consistency
     const rev = preParsed.revenue ?? llmResult.revenue ?? null;
@@ -662,17 +711,17 @@ function preParseCSVMetrics(text: string): Partial<FinancialMetrics> {
     const cl = preParsed.currentLiabilities ?? llmResult.currentLiabilities ?? null;
 
     // Calculate margins deterministically
-    let grossM: number | null = null;
-    if (rev !== null && cogsVal !== null && rev > 0) {
+    let grossM: number | null = preParsed.grossMargin ?? null;
+    if (grossM == null && rev !== null && cogsVal !== null && rev > 0) {
       grossM = Math.round(((rev - cogsVal) / rev) * 100 * 10) / 10;
-    } else if (llmResult.grossMargin != null) {
+    } else if (grossM == null && llmResult.grossMargin != null) {
       grossM = Math.round(llmResult.grossMargin * 10) / 10;
     }
 
-    let opM: number | null = null;
-    if (rev !== null && pay !== null && rev > 0) {
+    let opM: number | null = preParsed.operatingMargin ?? null;
+    if (opM == null && rev !== null && pay !== null && rev > 0) {
       opM = Math.round(((rev - (cogsVal || 0) - pay) / rev) * 100 * 10) / 10;
-    } else if (llmResult.operatingMargin != null) {
+    } else if (opM == null && llmResult.operatingMargin != null) {
       opM = Math.round(llmResult.operatingMargin * 10) / 10;
     }
 
