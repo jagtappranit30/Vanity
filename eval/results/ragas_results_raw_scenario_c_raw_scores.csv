@@ -1,0 +1,31 @@
+run,question,category,faithfulness,context_precision,context_recall,answer_relevancy
+1,What is the total annual revenue of Meridian Manufacturing Ltd for FY2024?,income_statement,0.7422,0.9835,0.775,0.8254
+1,How many full-time equivalent employees did Meridian employ in FY2024?,labour_efficiency,1.0,0.9744,0.7,0.75
+1,What was the gross margin percentage for FY2024?,income_statement,0.6,1.0,0.7,0.7801
+1,What is the company's current ratio as at 31 December 2024?,financial_health,1.0,0.9537,0.7,0.75
+1,What was the total payroll cost and what percentage of revenue does it represent?,labour_efficiency,1.0,0.9799,0.7,0.75
+1,What digital tools and software systems does Meridian Manufacturing use?,digital_maturity,0.8365,1.0,0.877,0.7834
+1,What is the revenue per employee and how does it compare to the sector median?,labour_efficiency,0.9542,0.9654,0.8413,0.75
+1,What is the output per payroll ratio and what does it indicate?,labour_efficiency,1.0,0.9732,0.9889,0.75
+1,What are the total current assets and their breakdown?,financial_health,1.0,0.9877,0.9909,0.75
+1,What is the digital maturity level of Meridian and what classification was assigned?,digital_maturity,1.0,1.0,0.8447,0.75
+2,What is the total annual revenue of Meridian Manufacturing Ltd for FY2024?,income_statement,0.7422,0.9835,0.775,0.8254
+2,How many full-time equivalent employees did Meridian employ in FY2024?,labour_efficiency,1.0,0.9744,0.7,0.75
+2,What was the gross margin percentage for FY2024?,income_statement,0.6,1.0,0.7,0.7801
+2,What is the company's current ratio as at 31 December 2024?,financial_health,1.0,0.9537,0.7,0.75
+2,What was the total payroll cost and what percentage of revenue does it represent?,labour_efficiency,1.0,0.9799,0.7,0.75
+2,What digital tools and software systems does Meridian Manufacturing use?,digital_maturity,0.8365,1.0,0.877,0.7834
+2,What is the revenue per employee and how does it compare to the sector median?,labour_efficiency,0.9542,0.9654,0.8413,0.75
+2,What is the output per payroll ratio and what does it indicate?,labour_efficiency,1.0,0.9732,0.9889,0.75
+2,What are the total current assets and their breakdown?,financial_health,1.0,0.9877,0.9909,0.75
+2,What is the digital maturity level of Meridian and what classification was assigned?,digital_maturity,1.0,1.0,0.8447,0.75
+3,What is the total annual revenue of Meridian Manufacturing Ltd for FY2024?,income_statement,0.7422,0.9835,0.775,0.8254
+3,How many full-time equivalent employees did Meridian employ in FY2024?,labour_efficiency,1.0,0.9744,0.7,0.75
+3,What was the gross margin percentage for FY2024?,income_statement,0.6,1.0,0.7,0.7801
+3,What is the company's current ratio as at 31 December 2024?,financial_health,1.0,0.9537,0.7,0.75
+3,What was the total payroll cost and what percentage of revenue does it represent?,labour_efficiency,1.0,0.9799,0.7,0.75
+3,What digital tools and software systems does Meridian Manufacturing use?,digital_maturity,0.8365,1.0,0.877,0.7834
+3,What is the revenue per employee and how does it compare to the sector median?,labour_efficiency,0.9542,0.9654,0.8413,0.75
+3,What is the output per payroll ratio and what does it indicate?,labour_efficiency,1.0,0.9732,0.9889,0.75
+3,What are the total current assets and their breakdown?,financial_health,1.0,0.9877,0.9909,0.75
+3,What is the digital maturity level of Meridian and what classification was assigned?,digital_maturity,1.0,1.0,0.8447,0.8791
