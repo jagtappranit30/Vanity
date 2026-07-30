@@ -195,6 +195,10 @@ def run_evaluation(args: argparse.Namespace) -> None:
     output_path = Path(args.output)
     top_k: int = args.top_k
 
+    ground_truth_path = Path(args.ground_truth) if hasattr(args, "ground_truth") else GROUND_TRUTH_PATH
+    fixture_path = Path(args.fixture) if hasattr(args, "fixture") else FIXTURE_PATH
+    doc_id = args.doc_id if hasattr(args, "doc_id") else DOC_ID
+
     console.rule("[bold blue]Vantly RAG Evaluation Harness[/bold blue]")
     console.print(f"  RAG service : [cyan]{rag_url}[/cyan]")
     console.print(f"  Runs        : [cyan]{n_runs}[/cyan]")
@@ -203,22 +207,22 @@ def run_evaluation(args: argparse.Namespace) -> None:
     console.print()
 
     # ── 1. Load ground truth ──────────────────────────────────────────────────
-    if not GROUND_TRUTH_PATH.exists():
-        console.print(f"[red]Ground truth file not found: {GROUND_TRUTH_PATH}[/red]")
+    if not ground_truth_path.exists():
+        console.print(f"[red]Ground truth file not found: {ground_truth_path}[/red]")
         sys.exit(1)
 
-    with open(GROUND_TRUTH_PATH) as f:
+    with open(ground_truth_path) as f:
         ground_truth: list[dict] = yaml.safe_load(f)
 
-    console.print(f"[green]✓[/green] Loaded [bold]{len(ground_truth)}[/bold] QA pairs from ground_truth.yaml")
+    console.print(f"[green]✓[/green] Loaded [bold]{len(ground_truth)}[/bold] QA pairs from {ground_truth_path.name}")
 
     # ── 2. Verify fixture exists ──────────────────────────────────────────────
-    if not FIXTURE_PATH.exists():
-        console.print(f"[red]Fixture file not found: {FIXTURE_PATH}[/red]")
+    if not fixture_path.exists():
+        console.print(f"[red]Fixture file not found: {fixture_path}[/red]")
         sys.exit(1)
 
-    fixture_size = FIXTURE_PATH.stat().st_size
-    console.print(f"[green]✓[/green] Fixture document: {FIXTURE_PATH.name} ({fixture_size:,} bytes)")
+    fixture_size = fixture_path.stat().st_size
+    console.print(f"[green]✓[/green] Fixture document: {fixture_path.name} ({fixture_size:,} bytes)")
 
     with httpx.Client() as http:
         # ── 3. Health check ───────────────────────────────────────────────────
@@ -242,9 +246,9 @@ def run_evaluation(args: argparse.Namespace) -> None:
         )
 
         # ── 4. Index the fixture document ─────────────────────────────────────
-        console.print(f"\n[bold]Indexing fixture document (doc_id={DOC_ID})...[/bold]")
+        console.print(f"\n[bold]Indexing fixture document (doc_id={doc_id})...[/bold]")
         try:
-            index_result = index_document(http, rag_url, DOC_ID, FIXTURE_PATH)
+            index_result = index_document(http, rag_url, doc_id, fixture_path)
         except httpx.HTTPStatusError as e:
             console.print(f"[red]✗ /index returned HTTP {e.response.status_code}: {e.response.text}[/red]")
             sys.exit(1)
@@ -272,7 +276,7 @@ def run_evaluation(args: argparse.Namespace) -> None:
                 category: str = qa.get("category", "uncategorised")
 
                 try:
-                    answer, contexts = query_rag(http, rag_url, DOC_ID, question, top_k=top_k)
+                    answer, contexts = query_rag(http, rag_url, doc_id, question, top_k=top_k)
                 except httpx.HTTPStatusError as e:
                     console.print(f"\n  [red]✗ /query error for: {question[:50]!r}: HTTP {e.response.status_code}[/red]")
                     answer = ""
@@ -311,9 +315,21 @@ def run_evaluation(args: argparse.Namespace) -> None:
                 time.sleep(5)
 
     # ── 6. RAGAS evaluation ───────────────────────────────────────────────────
+    # Save raw records immediately before RAGAS in case RAGAS crashes
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    raw_df = pd.DataFrame(raw_records)
+    raw_path = output_path.with_stem(output_path.stem + "_raw")
+    raw_df.to_csv(raw_path, index=False)
+    console.print(f"[green]✓ Saved raw query responses to {raw_path}[/green]")
+
     console.rule("[bold]RAGAS Evaluation[/bold]")
     console.print("Building RAGAS evaluator with OpenAI gpt-4o-mini + text-embedding-3-small...")
-    metrics, metric_names = build_ragas_evaluator()
+    try:
+        metrics, metric_names = build_ragas_evaluator()
+    except Exception as e:
+        console.print(f"[red]✗ Failed to build RAGAS evaluator: {e}[/red]")
+        console.print("[yellow]Skipping RAGAS. Run score_only.py to use heuristic scoring on the saved raw CSV.[/yellow]")
+        sys.exit(0)
 
     run_agg_rows: list[dict] = []       # One row per run, aggregated across questions
     per_question_rows: list[dict] = []  # One row per (run, question)
@@ -480,6 +496,18 @@ Examples:
   # Custom output location
   python evaluate.py --output results/v1_baseline.csv
         """,
+    )
+    p.add_argument(
+        "--fixture",
+        help="Path to the fixture text file to index (default: eval/fixtures/meridian_financials.txt)",
+    )
+    p.add_argument(
+        "--ground-truth",
+        help="Path to the ground truth YAML file (default: eval/ground_truth.yaml)",
+    )
+    p.add_argument(
+        "--doc-id",
+        help="Document ID for the vector store (default: eval_meridian_2024)",
     )
     p.add_argument(
         "--rag-url",
