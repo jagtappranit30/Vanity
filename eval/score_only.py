@@ -36,10 +36,13 @@ EVAL_DIR = Path(__file__).parent
 load_dotenv(dotenv_path=EVAL_DIR.parent / ".env")
 
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
-RAW_CSV = EVAL_DIR / "results" / "ragas_results_raw.csv"
-OUT_CSV = EVAL_DIR / "results" / "ragas_scores.csv"
-OUT_JSON = EVAL_DIR / "results" / "ragas_scores.json"
-OUT_SUMMARY = EVAL_DIR / "results" / "ragas_scores_summary.csv"
+
+input_file = sys.argv[1] if len(sys.argv) > 1 else "ragas_results_raw.csv"
+input_stem = Path(input_file).stem
+RAW_CSV = EVAL_DIR / "results" / input_file
+OUT_CSV = EVAL_DIR / "results" / f"{input_stem}_scores.csv"
+OUT_JSON = EVAL_DIR / "results" / f"{input_stem}_scores.json"
+OUT_SUMMARY = EVAL_DIR / "results" / f"{input_stem}_scores_summary.csv"
 
 METRIC_NAMES = ["faithfulness", "context_precision", "context_recall", "answer_relevancy"]
 

@@ -195,9 +195,9 @@ def run_evaluation(args: argparse.Namespace) -> None:
     output_path = Path(args.output)
     top_k: int = args.top_k
 
-    ground_truth_path = Path(args.ground_truth) if hasattr(args, "ground_truth") else GROUND_TRUTH_PATH
-    fixture_path = Path(args.fixture) if hasattr(args, "fixture") else FIXTURE_PATH
-    doc_id = args.doc_id if hasattr(args, "doc_id") else DOC_ID
+    ground_truth_path = Path(args.ground_truth) if getattr(args, "ground_truth", None) else GROUND_TRUTH_PATH
+    fixture_path = Path(args.fixture) if getattr(args, "fixture", None) else FIXTURE_PATH
+    doc_id = args.doc_id if getattr(args, "doc_id", None) else DOC_ID
 
     console.rule("[bold blue]Vantly RAG Evaluation Harness[/bold blue]")
     console.print(f"  RAG service : [cyan]{rag_url}[/cyan]")
