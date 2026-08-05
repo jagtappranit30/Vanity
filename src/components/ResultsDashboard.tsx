@@ -41,6 +41,17 @@ const CustomTooltip = ({ active, payload, label, formatter }: any) => {
   return null;
 };
 
+// Loading phase messages (stable reference outside component)
+const LOADING_STEPS = [
+  "Uploading financial statement to workspace server...",
+  "Initializing Ollama Qwen 2.5 cognitive parsing...",
+  "Scanning Balance Sheet & Profit & Loss statements...",
+  "Extracting Revenue, COGS, and liquidity figures...",
+  "Measuring labour productivity & payroll leverage...",
+  "Synthesizing customized AI recommendations...",
+  "Finalizing sector percentile benchmarks...",
+];
+
 export default function ResultsDashboard({
   assessment,
   onBack,
@@ -54,17 +65,6 @@ export default function ResultsDashboard({
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const [docUrl, setDocUrl] = useState<string | null>(null);
-
-  // Loading phase messages
-  const LOADING_STEPS = [
-    "Uploading financial statement to workspace server...",
-    "Initializing Ollama Qwen 2.5 cognitive parsing...",
-    "Scanning Balance Sheet & Profit & Loss statements...",
-    "Extracting Revenue, COGS, and liquidity figures...",
-    "Measuring labour productivity & payroll leverage...",
-    "Synthesizing customized AI recommendations...",
-    "Finalizing sector percentile benchmarks...",
-  ];
 
   const [loadingStep, setLoadingStep] = useState(0);
 
@@ -232,9 +232,9 @@ export default function ResultsDashboard({
       }
 
       setDocUrl(data.docUrl);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Export failed:", err);
-      setExportError(err.message || "Failed to export report.");
+      setExportError(err instanceof Error ? err.message : "Failed to export report.");
     } finally {
       setIsExporting(false);
     }

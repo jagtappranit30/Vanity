@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { MessageSquare, Send, Sparkles, FileText, Database, ShieldCheck, ChevronDown, ChevronUp, Bot, User, RefreshCw } from "lucide-react";
+import { useAuth } from "../context/AuthContext.tsx";
 
 interface RAGSource {
   chunk_id: string;
@@ -23,6 +24,7 @@ interface RAGChatProps {
 }
 
 export const RAGChat: React.FC<RAGChatProps> = ({ docId, companyName, fileName }) => {
+  const { idToken } = useAuth();
   const [question, setQuestion] = useState("");
   const [loading, setLoading] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -39,16 +41,19 @@ export const RAGChat: React.FC<RAGChatProps> = ({ docId, companyName, fileName }
     checking: false,
   });
   const [expandedSourceId, setExpandedSourceId] = useState<string | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Check health of Python RAG microservice on mount
+  // Auto-scroll to bottom when messages change
   useEffect(() => {
-    checkHealth();
-  }, []);
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, loading]);
 
-  const checkHealth = async () => {
+  const checkHealth = useCallback(async () => {
     setServiceStatus((prev) => ({ ...prev, checking: true }));
     try {
-      const res = await fetch("/api/rag/health");
+      const res = await fetch("/api/rag/health", {
+        headers: idToken ? { Authorization: `Bearer ${idToken}` } : {},
+      });
       if (res.ok) {
         const data = await res.json();
         setServiceStatus({
@@ -62,7 +67,12 @@ export const RAGChat: React.FC<RAGChatProps> = ({ docId, companyName, fileName }
     } catch {
       setServiceStatus({ healthy: false, docCount: 0, checking: false });
     }
-  };
+  }, [idToken]);
+
+  // Check health of Python RAG microservice on mount
+  useEffect(() => {
+    checkHealth();
+  }, [checkHealth]);
 
   const handleAsk = async (promptText?: string) => {
     const q = (promptText || question).trim();
@@ -82,7 +92,10 @@ export const RAGChat: React.FC<RAGChatProps> = ({ docId, companyName, fileName }
     try {
       const res = await fetch("/api/rag/query", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+        },
         body: JSON.stringify({
           doc_id: docId,
           question: q,
@@ -106,13 +119,14 @@ export const RAGChat: React.FC<RAGChatProps> = ({ docId, companyName, fileName }
       };
 
       setMessages((prev) => [...prev, botMsg]);
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to retrieve context vector answers.";
       setMessages((prev) => [
         ...prev,
         {
           id: Math.random().toString(36).substring(2, 9),
           sender: "assistant",
-          text: `⚠️ RAG Error: ${err.message || "Failed to retrieve context vector answers."}`,
+          text: `⚠️ RAG Error: ${message}`,
           timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         },
       ]);
@@ -279,6 +293,7 @@ export const RAGChat: React.FC<RAGChatProps> = ({ docId, companyName, fileName }
             </div>
           </div>
         )}
+        <div ref={messagesEndRef} />
       </div>
 
       {/* Input Box */}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Layers, Award, ShieldAlert, Cpu, Lightbulb, FileText, BarChart3, HelpCircle, X, LogIn, Database, CheckCircle, ArrowRight, Users, Sun, Moon } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { AssessmentRun } from "./types";
@@ -29,9 +29,10 @@ export default function App() {
     setAuthError(null);
     try {
       await signInWithGoogle();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Google sign-in error:", err);
-      const code = err?.code || "";
+      const code = err instanceof Object && "code" in err ? (err as { code: string }).code : "";
+      const msg = err instanceof Error ? err.message : "Sign-in failed. Use 'Direct Access (Guest Mode)' to enter immediately.";
       if (code === "auth/unauthorized-domain") {
         setAuthError("Domain not authorized in Firebase Auth Console. Click 'Direct Access (Guest Mode)' below to bypass.");
       } else if (code === "auth/popup-blocked") {
@@ -39,7 +40,7 @@ export default function App() {
       } else if (code === "auth/popup-closed-by-user") {
         setAuthError("Sign-in popup closed before completing.");
       } else {
-        setAuthError(err?.message || "Sign-in failed. Use 'Direct Access (Guest Mode)' to enter immediately.");
+        setAuthError(msg);
       }
     }
   };
@@ -64,7 +65,7 @@ export default function App() {
   }, [user]);
 
   // Fetch assessment runs on component mount or token change
-  const fetchHistory = async () => {
+  const fetchHistory = useCallback(async () => {
     if (!idToken) return;
     try {
       setIsLoadingHistory(true);
@@ -77,8 +78,8 @@ export default function App() {
         const data = await res.json();
         setHistory(data);
         // Default to showing the latest assessment if any exist
-        if (data.length > 0 && !selectedAssessment) {
-          setSelectedAssessment(data[0]);
+        if (data.length > 0) {
+          setSelectedAssessment((prev) => prev ?? data[0]);
         }
       }
     } catch (err) {
@@ -86,7 +87,7 @@ export default function App() {
     } finally {
       setIsLoadingHistory(false);
     }
-  };
+  }, [idToken]);
 
   useEffect(() => {
     if (idToken) {
@@ -98,8 +99,8 @@ export default function App() {
         if (localDataStr) {
           const data = JSON.parse(localDataStr) as AssessmentRun[];
           setHistory(data);
-          if (data.length > 0 && !selectedAssessment) {
-            setSelectedAssessment(data[0]);
+          if (data.length > 0) {
+            setSelectedAssessment((prev) => prev ?? data[0]);
           }
         } else {
           setHistory([]);
@@ -113,7 +114,7 @@ export default function App() {
       setHistory([]);
       setSelectedAssessment(null);
     }
-  }, [idToken, isGuestMode]);
+  }, [idToken, isGuestMode, fetchHistory]);
 
   // Sync guest history with localStorage
   useEffect(() => {
@@ -159,9 +160,9 @@ export default function App() {
 
       setHistory((prev) => [data, ...prev]);
       setSelectedAssessment(data);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Processing failed:", err);
-      let msg = err.message || "Failed to process document. Please check your network connection.";
+      let msg = err instanceof Error ? err.message : "Failed to process document. Please check your network connection.";
       if (msg.includes("RESOURCE_EXHAUSTED") || msg.includes("429") || msg.includes("quota")) {
         msg = "Cloud API quota limits reached and local Ollama model was unavailable. Please start Ollama or try again in a few moments.";
       }
@@ -373,7 +374,7 @@ export default function App() {
             </div>
 
             {/* Minor Info Bento blocks */}
-            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-[2rem] p-6.5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between min-h-[170px] transition-colors duration-300">
+            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-[2rem] p-6.5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between min-h-[170px] duration-300">
               <div>
                 <div className="w-8 h-8 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/45 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mb-3.5 border border-indigo-100/30 dark:border-indigo-900/20">
                   <Users className="w-4 h-4" />
@@ -386,7 +387,7 @@ export default function App() {
               </div>
             </div>
 
-            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-[2rem] p-6.5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between min-h-[170px] transition-colors duration-300">
+            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-[2rem] p-6.5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between min-h-[170px] duration-300">
               <div>
                 <div className="w-8 h-8 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/45 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mb-3.5 border border-indigo-100/30 dark:border-indigo-900/20">
                   <BarChart3 className="w-4 h-4" />
@@ -399,7 +400,7 @@ export default function App() {
               </div>
             </div>
 
-            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-[2rem] p-6.5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between min-h-[170px] transition-colors duration-300">
+            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-[2rem] p-6.5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between min-h-[170px] duration-300">
               <div>
                 <div className="w-8 h-8 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/45 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mb-3.5 border border-indigo-100/30 dark:border-indigo-900/20">
                   <FileText className="w-4 h-4" />

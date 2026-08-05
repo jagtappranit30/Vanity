@@ -1,5 +1,5 @@
 import React, { useState, useRef } from "react";
-import { Upload, FileText, AlertCircle, RefreshCw, Briefcase, HelpCircle, Check, Info } from "lucide-react";
+import { Upload, FileText, AlertCircle, RefreshCw, Check, Info } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useAuth } from "../context/AuthContext.tsx";
 
