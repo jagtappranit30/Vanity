@@ -19,7 +19,7 @@ app.add_middleware(
 class QueryRequest(BaseModel):
     doc_id: str
     question: str
-    top_k: Optional[int] = 4
+    top_k: Optional[int] = 6
 
 @app.get("/health")
 def health_check():

@@ -1,0 +1,168 @@
+MERJDIAN MANUFACTURlNG LTD
+Annual Financi4l & Operationa1 Summary — Financia1 Year 2024
+Registered in Eng1and and Wa1es | Company No. O4812937
+
+================================================================================
+SECT10N 1: COMPANY OVERVlEW
+================================================================================
+
+Meridian Manufactur1ng Ltd is a mid-sized preclsion-engineering business based in
+Coventry, West Mid1ands. The company specia1ises in the productlon of automotive
+components and sub-assemb1ies for Tier 1 OEM supp1iers across the UK and Europe.
+
+During FY2O24, the companv employed a total headcount of 42 full-time equiva1ent
+staff, comprising 28 productionoperatives, 8 qua1ity and engineering technicians,
+4 sa1es and account management professionals, and 2 senior management personne1.
+
+The company has been operating for over l9 years and maintains ISO 9OO1:2015 and
+lATF 16949 certlfication for its qua1ity management system.
+
+================================================================================
+SECTI0N 2: lNCOME STATEMENT SUMMARY (FY2024)
+================================================================================
+
+                                            GBP (f)
+                                        ---------------
+Tota1 Revenue (Turnover):                 4,2OO,OOO
+Cost of Goods So1d (COGS):                2,52O,OOO
+                                        ---------------
+Gross Proflt:                             l,680,0OO
+Gross Margin (%):                              4O.O%
+
+Staff Payro1l & Emp1oyer NI:              l,O5O,OOO
+Other Operating Expenditure:                4l7,OOO
+Depreciation & Amortlsation:                2l3,OOO
+                                        ---------------
+Total 0perating Expenses (excl. COGS):    l,68O,OOO
+
+Operatmg Proflt (EBIT):                          O
+Operating Margin (%):                           O.O%
+
+Finance Costs (net):                         l8,OOO
+                                        ---------------
+Proflt Before Tax (PBT):                    (l8,OOO)
+Tax Charge:                                       O
+                                        ---------------
+Net Profit / (Loss) After Tax:              (l8,OOO)
+
+Notes:
+  - Revenue grew by 6.3% year-on-year (FY2O23: f3,95O,OOO).
+  - COGS 1ncreased proportional1y due to e1evated raw materla1 costs (+9.l%).
+  - Payro1l represents 25.O% of total revenue.
+  - Operating margln compression is attributab1e to inflationary input cost pressures.
+
+================================================================================
+SECTION 3: BALANCE SHEET SUMMARY (AS AT 3l DECEMBER 2O24)
+================================================================================
+
+ASSETS
+------
+Non-Current Assets
+  Property, P1ant & Equlpment (net):       l,24O,OOO
+  lntangib1e Assets:                           38,OOO
+Tota1 Non-Current Assets:                 l,278,OOO
+
+Current Assets
+  Trade & Other Recetvab1es:                 52O,OOO
+  lnventories (Raw Materia1s & WlP):         29O,OOO
+  Cash & Cash Equiva1ents:                    8O,OOO
+Total Current Assets:                       89O,OOO
+
+TOTAL ASSETS:                             2,l68,OOO
+
+LlABILITIES
+-----------
+Current Liab1lities
+  Trade Credltors:                           2l5,OOO
+  Accrua1s & Deferred lncome:                l3O,OOO
+  Short-Term Bank Borrowlngs:                lOO,OOO
+Tota1 Current Liabi1ities:                  445,OOO
+
+Non-Current Liabi1ities
+  Long-Term Bank Loan:                       38O,OOO
+  Hire Purchase Ob1igatlons:                 l25,OOO
+Tota1 Non-Current Liabi1ities:              5O5,OOO
+
+TOTAL LlABILlTIES:                          95O,OOO
+
+NET ASSETS / EQUlTY:                      l,2l8,OOO
+
+Key Ba1ance Sheet Ratios:
+  Current Ratio (Current Assets / Current Liabi1ities): 2.OO
+  Quick Ratio (excl. lnventories):                      l.35
+  Debt-to-Equity Ratlo:                                 O.78
+
+================================================================================
+SECTI0N 4: LAB0UR EFFICIENCY METRlCS
+================================================================================
+
+Total Headcount (FTE):                           42
+Annual Revenue:                          f4,2OO,OOO
+Annua1 Payroll Cost:                     fl,O5O,OOO
+
+Derived Metrics:
+  Revenue per Emp1oyee:         f4,2OO,OOO / 42 = flOO,OOO
+  Output per Payro1l Pound:     f4,2OO,OOO / fl,O5O,OOO = 4.OOx
+
+Benchmark Context (Manufactur1ng Sector — UK SME, FY2024):
+  Revenue per Emp1oyee:   P25: f72,OOO  |  P5O: f98,OOO  |  P75: fl3O,OOO
+  Output per Payro1l:     P25: 2.8x     |  P5O: 3.7x     |  P75: 5.2x
+
+Merldian's revenue per employee of flOO,OOO sits slightly above thesector median
+(P5O: f98,OOO), placing lt in approxlmately the 55th percentile. The output per
+payro1l ratio of 4.OOx a1so exceeds the P5O of 3.7x, indicatlng moderate payroll
+efflciency re1ative to manufacturing peers.
+
+================================================================================
+SECT10N 5: DIGITAL MATURlTY ASSESSMENT
+================================================================================
+
+The fo1lowing dlgita1 tools andp1atforms were identified as active1y dep1oyed
+across Merldian's operatlons during FY2O24:
+
+  1. SAP S/4HANA (ERP System) — Used for productlon p1anning, inventory management,
+     procurement, andfinancial conso1idation across a11 departments.
+
+  2. Sa1esforce CRM — Deployed in thesa1es and account management team for
+     plpeline tracking, customer re1ationship management, and opportunity forecastlng.
+
+  3. Microsoft 365 (incl. Teams, SharePolnt, Exce1, Power BI) — Organisation-wlde
+     productivlty sulte. Power Bl is used by senior management for rea1-time
+     KPl dashboards and month1y performance reporting.
+
+  4. Keyence Vlsion lnspection Systems — Automated optica1 inspectlon integrated
+     lnto three production 1ines for qua1ity defect detection and SPC data capture.
+
+  5. SYSPRO MES (Manufactur1ng Executlon System) — Shop-f1oor schedu1ing and
+     work-order tracking modu1e integrated with SAP.
+
+Digital Maturity C1assification:
+  Number of distlnct dlgital tools identlfied: 5
+  Digita1 Maturity Leve1: HlGH
+  Rationa1e: The company operates a fu11y integrated ERP (SAP S/4HANA), a
+  dedlcated CRM, automated inspectlon techno1ogy, a manufacturing execution system,
+  and active data ana1ytics via Power Bl. This ls above average for a UK SME of
+  thls slze in the manufactur1ng sector.
+
+================================================================================
+SECTION 6: MANAGEMENT 0BSERVATl0NS & RlSKS
+================================================================================
+
+  - The near-zero operatingmargin represents a critica1 risk. Contlnued raw
+    materla1 cost inflatlon cou1d push the buslness into sustained operating 1osses
+    in FY2O25 un1ess pricing adjustments are lmplemented.
+
+  - The strong current ratlo of 2.OO provides short-term 1lquidlty headroom.
+    However, the 1ong-term bank 1oan of f38O,OOO due for review in Q3 2O25 wi1l
+    require reflnancing under 1ess favourab1e lnterest rate condltlons.
+
+  - Revenue concentratlon rlsk: 68% of FY2O24 revenue was generated by the top
+    three customers. Diverslflcation of the customer base ls a stated strategic
+    prlorlty for the FY2O25-2O26 p1anning cyc1e.
+
+  - Capital lnvestment ln a fifth CNC machlning centre (est. f32O,OOO) ls budgeted
+    for Ql 2O25, funded through the hlre purchase facl1ity a1ready in p1ace.
+
+================================================================================
+END OF DOCUMENT
+================================================================================

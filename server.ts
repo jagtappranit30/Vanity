@@ -1,11 +1,11 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
+import crypto from "crypto";
 import { spawn } from "child_process";
 import { createServer as createViteServer } from "vite";
 import multer from "multer";
 import dotenv from "dotenv";
-// Local Ollama-only LLM — no cloud dependencies
 import { FinancialMetrics, SectorBenchmarks, AssessmentScores, AssessmentRun } from "./src/types";
 import { db } from "./src/db/index.ts";
 import { assessments } from "./src/db/schema.ts";
@@ -44,11 +44,28 @@ function startRAGService() {
   });
 }
 
-// Call launcher
 startRAGService();
 
 const app = express();
 const PORT = 3000;
+
+// Memory stores for guest security & rate limiting
+const guestDocumentIds = new Set<string>();
+const guestRateLimiter = new Map<string, { count: number; resetTime: number }>();
+
+function checkGuestRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const record = guestRateLimiter.get(ip);
+  if (!record || now > record.resetTime) {
+    guestRateLimiter.set(ip, { count: 1, resetTime: now + 15 * 60 * 1000 });
+    return true;
+  }
+  if (record.count >= 10) {
+    return false; // Limit exceeded: 10 requests per 15 min per IP
+  }
+  record.count++;
+  return true;
+}
 
 // Setup in-memory file upload middleware (max 15MB)
 const upload = multer({
@@ -56,7 +73,100 @@ const upload = multer({
   limits: { fileSize: 15 * 1024 * 1024 },
 });
 
-app.use(express.json());
+// Multer error handling middleware wrapper
+const handleUpload = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  upload.single("file")(req, res, (err: any) => {
+    if (err instanceof multer.MulterError) {
+      if (err.code === "LIMIT_FILE_SIZE") {
+        return res.status(400).json({ error: "File size exceeds the 15 MB limit." });
+      }
+      return res.status(400).json({ error: `Upload error: ${err.message}` });
+    } else if (err) {
+      return res.status(400).json({ error: `Upload error: ${err.message}` });
+    }
+    next();
+  });
+};
+
+app.use(express.json({ limit: "2mb" }));
+
+// Server-side File Validation Helper
+function validateUploadedFile(file?: Express.Multer.File): { valid: boolean; error?: string; isPDF: boolean; isCSV: boolean } {
+  if (!file || !file.buffer || file.buffer.length === 0) {
+    return { valid: false, error: "Uploaded file is empty. Please upload a valid PDF or CSV file.", isPDF: false, isCSV: false };
+  }
+
+  const ext = path.extname(file.originalname).toLowerCase();
+  const isPdfExt = ext === ".pdf";
+  const isCsvExt = ext === ".csv" || ext === ".txt";
+
+  if (!isPdfExt && !isCsvExt) {
+    return { valid: false, error: "Invalid file extension. Only PDF (.pdf) and CSV (.csv) files are allowed.", isPDF: false, isCSV: false };
+  }
+
+  // Inspect file signature / magic bytes
+  const header = file.buffer.subarray(0, 5).toString("latin1");
+  if (isPdfExt) {
+    if (!header.startsWith("%PDF")) {
+      return { valid: false, error: "Invalid PDF file signature. The file is corrupted or invalid.", isPDF: false, isCSV: false };
+    }
+    return { valid: true, isPDF: true, isCSV: false };
+  }
+
+  // CSV validation: ensure no binary null bytes
+  const sample = file.buffer.subarray(0, 2048);
+  for (let i = 0; i < sample.length; i++) {
+    if (sample[i] === 0) {
+      return { valid: false, error: "Invalid CSV file content. Binary data detected.", isPDF: false, isCSV: false };
+    }
+  }
+
+  return { valid: true, isPDF: false, isCSV: true };
+}
+
+// Fetch helper with AbortController timeout protection
+async function fetchWithTimeout(url: string, options: any = {}, timeoutMs = 120000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { ...options, signal: controller.signal });
+    return res;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Document Ownership Verification for RAG Security
+async function verifyDocumentOwnership(docId: string, userUid?: string): Promise<{ authorized: boolean; reason?: string }> {
+  if (!docId) return { authorized: false, reason: "Missing doc_id parameter." };
+
+  if (userUid) {
+    try {
+      const found = await db.select().from(assessments).where(eq(assessments.id, docId));
+      if (found.length === 0) {
+        if (guestDocumentIds.has(docId)) return { authorized: true };
+        return { authorized: false, reason: "Document not found." };
+      }
+      if (found[0].userUid !== userUid) {
+        return { authorized: false, reason: "Forbidden: You do not own this document." };
+      }
+      return { authorized: true };
+    } catch (err: any) {
+      console.error("[Ownership Check Error]:", err.message);
+      if (guestDocumentIds.has(docId)) return { authorized: true };
+      return { authorized: false, reason: "Database verification failed." };
+    }
+  } else {
+    if (guestDocumentIds.has(docId)) return { authorized: true };
+    try {
+      const found = await db.select().from(assessments).where(eq(assessments.id, docId));
+      if (found.length > 0 && found[0].userUid) {
+        return { authorized: false, reason: "Forbidden: Authenticated document cannot be accessed by guests." };
+      }
+    } catch {}
+    return { authorized: true };
+  }
+}
 
 // Sector benchmarks definition
 const SECTOR_BENCHMARKS: Record<string, SectorBenchmarks> = {
@@ -90,67 +200,86 @@ const SECTOR_BENCHMARKS: Record<string, SectorBenchmarks> = {
   },
 };
 
-// Local JSON database removed in favor of high-performance Cloud SQL PostgreSQL database
-
-// Scoring logic
+// Scoring logic — clearly handles null inputs vs reported zeros
 function calculateScores(metrics: any, sectorName: string): { scores: AssessmentScores, benchmarks: SectorBenchmarks } {
   const benchmarks = SECTOR_BENCHMARKS[sectorName] || SECTOR_BENCHMARKS["Other"];
 
   // 1. LABOUR EFFICIENCY (0-50)
-  // Component A: Revenue per Employee (0-25)
   let revPerEmp = 0;
-  let revPerEmpScore = 12.5; // default half if missing
+  let revPerEmpScore = 0;
+  let hasRevPerEmp = false;
   const refRevPerEmpP50 = benchmarks.revenue_per_employee.p50;
 
   if (metrics.revenue !== null && metrics.headcount !== null && metrics.headcount > 0) {
     revPerEmp = metrics.revenue / metrics.headcount;
     const ratio = revPerEmp / refRevPerEmpP50;
     revPerEmpScore = Math.min(Math.max(ratio * 12.5, 3), 25);
+    hasRevPerEmp = true;
   }
 
-  // Component B: Output per Payroll (0-25)
   let outputPerPayroll = 0;
-  let outputPerPayrollScore = 12.5; // default half if missing
+  let outputPerPayrollScore = 0;
+  let hasOutputPerPayroll = false;
   const refOutputPerPayrollP50 = benchmarks.output_per_payroll.p50;
 
   if (metrics.revenue !== null && metrics.payroll !== null && metrics.payroll > 0) {
     outputPerPayroll = metrics.revenue / metrics.payroll;
     const ratio = outputPerPayroll / refOutputPerPayrollP50;
     outputPerPayrollScore = Math.min(Math.max(ratio * 12.5, 3), 25);
+    hasOutputPerPayroll = true;
   }
 
-  const labourEfficiencyScore = Math.round((revPerEmpScore + outputPerPayrollScore) * 10) / 10;
+  let labourEfficiencyScore = 0;
+  if (hasRevPerEmp && hasOutputPerPayroll) {
+    labourEfficiencyScore = Math.round((revPerEmpScore + outputPerPayrollScore) * 10) / 10;
+  } else if (hasRevPerEmp) {
+    labourEfficiencyScore = Math.round(revPerEmpScore * 2 * 10) / 10;
+  } else if (hasOutputPerPayroll) {
+    labourEfficiencyScore = Math.round(outputPerPayrollScore * 2 * 10) / 10;
+  } else {
+    labourEfficiencyScore = 25.0; // Default baseline if metrics non-disclosed
+  }
 
   // 2. FINANCIAL HEALTH (0-50)
-  // Component A: Profit Margins (0-25)
   let grossMarginVal = metrics.grossMargin;
   if (grossMarginVal === null && metrics.revenue !== null && metrics.revenue > 0 && metrics.cogs !== null) {
     grossMarginVal = ((metrics.revenue - metrics.cogs) / metrics.revenue) * 100;
+    grossMarginVal = Math.max(-100, Math.min(100, grossMarginVal));
   }
 
-  let grossMarginScore = 6.25; // default half
+  let grossMarginScore = 0;
+  let hasGrossMargin = false;
   if (grossMarginVal !== null) {
     const ratio = grossMarginVal / benchmarks.gross_margin.p50;
     grossMarginScore = Math.min(Math.max(ratio * 6.25, 1.5), 12.5);
+    hasGrossMargin = true;
   }
 
-  let operatingMarginScore = 6.25; // default half
+  let operatingMarginScore = 0;
+  let hasOperatingMargin = false;
   if (metrics.operatingMargin !== null) {
     const ratio = metrics.operatingMargin / benchmarks.operating_margin.p50;
     operatingMarginScore = Math.min(Math.max(ratio * 6.25, 1.5), 12.5);
+    hasOperatingMargin = true;
   }
 
-  const marginScore = grossMarginScore + operatingMarginScore;
+  let marginScore = 12.5;
+  if (hasGrossMargin && hasOperatingMargin) {
+    marginScore = grossMarginScore + operatingMarginScore;
+  } else if (hasGrossMargin) {
+    marginScore = grossMarginScore * 2;
+  } else if (hasOperatingMargin) {
+    marginScore = operatingMarginScore * 2;
+  }
 
-  // Component B: Liquidity (Current Ratio) (0-25)
+  // Liquidity (Current Ratio) (0-25)
   let currentRatio = 1.5;
-  let liquidityScore = 12.5; // default
+  let liquidityScore = 12.5;
   if (metrics.currentAssets !== null && metrics.currentLiabilities !== null && metrics.currentLiabilities > 0) {
     currentRatio = metrics.currentAssets / metrics.currentLiabilities;
     if (currentRatio >= 1.5) {
       liquidityScore = 25;
     } else if (currentRatio >= 1.0) {
-      // Linear scaling from 1.0 (15) to 1.5 (25)
       liquidityScore = 15 + ((currentRatio - 1.0) / 0.5) * 10;
     } else {
       liquidityScore = Math.max(3, currentRatio * 15);
@@ -158,11 +287,9 @@ function calculateScores(metrics: any, sectorName: string): { scores: Assessment
   }
 
   const financialHealthScore = Math.round((marginScore + liquidityScore) * 10) / 10;
-
-  // 3. PRODUCTIVITY INDEX (0-100)
   const productivityIndex = Math.round((labourEfficiencyScore + financialHealthScore) * 10) / 10;
 
-  // 4. DIGITAL MATURITY SCORE
+  // Digital Maturity Score
   let toolsCount = metrics.digitalTools ? metrics.digitalTools.length : 0;
   let digitalMaturityScore = 30 + toolsCount * 12;
   const level = metrics.digitalMaturityLevel || "Medium";
@@ -180,8 +307,8 @@ function calculateScores(metrics: any, sectorName: string): { scores: Assessment
     },
     financialHealthScore,
     financialDetails: {
-      grossMargin: grossMarginVal !== null ? Math.round(grossMarginVal * 10) / 10 : 0,
-      operatingMargin: metrics.operatingMargin !== null ? Math.round(metrics.operatingMargin * 10) / 10 : 0,
+      grossMargin: grossMarginVal !== null ? Math.round(grossMarginVal * 10) / 10 : null,
+      operatingMargin: metrics.operatingMargin !== null ? Math.round(metrics.operatingMargin * 10) / 10 : null,
       currentRatio: Math.round(currentRatio * 100) / 100,
       grossMarginBenchmark: benchmarks.gross_margin.p50,
       operatingMarginBenchmark: benchmarks.operating_margin.p50,
@@ -403,160 +530,134 @@ Report generated automatically by Vantly - See your business clearly.
 });
 
 // Assess Document Endpoint
-app.post("/api/assess", optionalAuth, upload.single("file"), async (req: AuthRequest, res) => {
+app.post("/api/assess", optionalAuth, handleUpload, async (req: AuthRequest, res) => {
   try {
     const file = req.file;
     const sector = (req.body.sector || "Other") as string;
     const customCompanyName = req.body.companyName as string;
 
-    if (!file) {
-      return res.status(400).json({ error: "No file was uploaded. Please upload a PDF or CSV file." });
-    }
-
-    const fileExtension = path.extname(file.originalname).toUpperCase();
-    const isPDF = fileExtension === ".PDF" || file.mimetype === "application/pdf";
-    const isCSV = fileExtension === ".CSV" || file.mimetype === "text/csv" || file.mimetype === "application/vnd.ms-excel";
-
-// Extract plain text from PDF or CSV buffer for offline Ollama processing
-// Extract clean text from PDF or CSV using Python RAG service /extract endpoint with fallback
-async function extractTextForOllama(buffer: Buffer, originalName: string, isPDF: boolean): Promise<string> {
-  try {
-    const FormData = (await import("form-data")).default;
-    const form = new FormData();
-    form.append("file", buffer, { filename: originalName || "document.pdf" });
-    const extractRes = await fetch("http://127.0.0.1:8000/extract", {
-      method: "POST",
-      body: form.getBuffer(),
-      headers: form.getHeaders(),
-    });
-    if (extractRes.ok) {
-      const data: any = await extractRes.json();
-      if (data && data.text && data.text.length > 20) {
-        return data.text;
+    // Rate Limit Check for Guest users
+    if (!req.user?.uid) {
+      const clientIp = req.ip || req.socket.remoteAddress || "guest";
+      if (!checkGuestRateLimit(clientIp)) {
+        return res.status(429).json({ error: "Guest assessment rate limit exceeded. Please wait 15 minutes or sign in." });
       }
     }
-  } catch (err: any) {
-    console.warn("[Text Extract Warning] Python /extract service unavailable, using buffer fallback:", err.message);
-  }
 
-  if (!isPDF) {
-    return buffer.toString("utf-8");
-  }
-  const raw = buffer.toString("binary");
-  const textBlocks: string[] = [];
-  const regex = /\(([^)]+)\)\s*Tj|\[([^\]]+)\]\s*TJ/g;
-  let match;
-  while ((match = regex.exec(raw)) !== null) {
-    const text = match[1] || match[2];
-    if (text) textBlocks.push(text.replace(/\\/g, ""));
-  }
-  if (textBlocks.length > 5) {
-    return textBlocks.join(" ");
-  }
-  return buffer.toString("utf-8").replace(/[^\x20-\x7E\n\r\t]/g, " ");
-}
+    // Validate uploaded file signature and format
+    const valResult = validateUploadedFile(file);
+    if (!valResult.valid || !file) {
+      return res.status(400).json({ error: valResult.error || "Invalid upload." });
+    }
 
-interface TaskLLMConfig {
-  provider: "ollama";
-  model: string;
-  ollamaUrl?: string;
-}
+    const isPDF = valResult.isPDF;
+    const isCSV = valResult.isCSV;
 
-// Multi-LLM Router by Use Case
-function resolveTaskLLM(task: "assessment" | "rag" | "strategy"): TaskLLMConfig {
-  const globalProvider = (process.env.LLM_PROVIDER || "").toLowerCase();
-  const ollamaUrl = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
+    // Helper: Extract text using Python RAG service /extract endpoint
+    async function extractTextForOllama(buffer: Buffer, originalName: string, isPDFFile: boolean): Promise<string> {
+      if (!isPDFFile) {
+        return buffer.toString("utf-8");
+      }
 
-  const taskEnvPrefix = task.toUpperCase();
-  const taskProvider = process.env[`${taskEnvPrefix}_LLM_PROVIDER`]?.toLowerCase() || globalProvider;
+      try {
+        const FormData = (await import("form-data")).default;
+        const form = new FormData();
+        form.append("file", buffer, { filename: originalName || "document.pdf" });
 
-  const provider: "ollama" = "ollama";
+        const extractRes = await fetchWithTimeout("http://127.0.0.1:8000/extract", {
+          method: "POST",
+          body: form.getBuffer(),
+          headers: form.getHeaders(),
+        }, 60000);
 
-  let model = process.env[`${taskEnvPrefix}_MODEL`];
-  if (!model) {
-    model = process.env.OLLAMA_MODEL || "qwen2.5:7b";
-  }
+        if (extractRes.ok) {
+          const data: any = await extractRes.json();
+          if (data && data.text && data.text.length > 20) {
+            return data.text;
+          }
+        }
+      } catch (err: any) {
+        console.warn("[Text Extract Warning] Python /extract service call failed:", err.message);
+      }
 
-  return {
-    provider,
-    model,
-    ollamaUrl,
-  };
-}
+      // Safe PDF string extraction fallback
+      const raw = buffer.toString("binary");
+      const textBlocks: string[] = [];
+      const regex = /\(([^)]+)\)\s*Tj|\[([^\]]+)\]\s*TJ/g;
+      let match;
+      while ((match = regex.exec(raw)) !== null) {
+        const text = match[1] || match[2];
+        if (text) textBlocks.push(text.replace(/\\/g, ""));
+      }
+      return textBlocks.length > 5 ? textBlocks.join(" ") : buffer.toString("latin1").replace(/[^\x20-\x7E\n\r\t]/g, " ");
+    }
+
+    interface TaskLLMConfig {
+      provider: "ollama";
+      model: string;
+      ollamaUrl?: string;
+    }
+
+    function resolveTaskLLM(task: "assessment" | "rag" | "strategy"): TaskLLMConfig {
+      const globalProvider = (process.env.LLM_PROVIDER || "").toLowerCase();
+      const ollamaUrl = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
+      const taskEnvPrefix = task.toUpperCase();
+      let model = process.env[`${taskEnvPrefix}_MODEL`] || process.env.OLLAMA_MODEL || "qwen2.5:7b";
+
+      return { provider: "ollama", model, ollamaUrl };
+    }
 
     const llmConfig = resolveTaskLLM("assessment");
-    console.log(`[Multi-LLM Router] Task: Financial Assessment | Provider: ${llmConfig.provider.toUpperCase()} | Model: ${llmConfig.model}`);
+    console.log(`[Multi-LLM Router] Task: Financial Assessment | Model: ${llmConfig.model}`);
 
-    const apiKey = undefined;
     const ollamaUrl = llmConfig.ollamaUrl;
     const ollamaModel = llmConfig.model;
 
     let mimeType = isPDF ? "application/pdf" : "text/csv";
-    if (isCSV && !file.mimetype.includes("csv")) {
-      mimeType = "text/plain"; // fallback for CSV content representation
-    }
 
     const promptText = `You are an elite SME Productivity & Financial Analyst.
 Analyze the attached financial statement (which is a ${isPDF ? "PDF" : "CSV"} document) for an SME in the '${sector}' sector.
 
 CRITICAL ANTI-HALLUCINATION INSTRUCTIONS:
-- In the "thoughtProcess" string, you MUST first perform step-by-step reasoning. Write down each metric you need to find, look for it, write down where it is, and verify the math before outputting any final number.
 - You must ONLY extract numbers that are explicitly written in the attached text, or directly derivable from them with 100% mathematical certainty.
 - NEVER guess, approximate, estimate, or extrapolate any of these metrics: revenue, headcount, cogs, payroll, grossMargin, operatingMargin, currentAssets, currentLiabilities.
-- Micro-entity accounts in the UK or other regions frequently do NOT disclose headcount or payroll values. If headcount or payroll is not explicitly written in the document, you MUST return null. NEVER guess headcount based on company size or turnover.
-- If a metric is missing, return null for that field. Do not use 0 as a default.
-- In the "extractedJustifications" string, you MUST document the exact page number, table name, or section heading where you found each non-null value (e.g., "Revenue: Page 2, Statement of Profit or Loss, 'Turnover: £450,000'").
-- If a metric is missing and returned as null, explicitly state in the "extractedJustifications" string that it was not found (e.g., "Headcount: Not disclosed in the uploaded accounts").
-- Do NOT list hypothetical software tools in "digitalTools" simply because they are common in the industry; only list tools explicitly named or directly referred to in the document.
+- UK / micro-entity accounts frequently do NOT disclose headcount, payroll, or operating margin values. If missing, return null.
+- In the "extractedJustifications" string, document the exact page number, section heading, or calculation note for each metric found (e.g., "Revenue: Page 2, Statement of Profit or Loss, 'Turnover: £450,000'").
+- If a metric is missing, explicitly state in "extractedJustifications" that it was not disclosed.
 
 Your task is to:
-1. First, reason and double-check all metrics inside the "thoughtProcess" block.
-2. Extract key financial metrics with highest precision. If a metric is not mentioned or cannot be calculated, use null.
-   - revenue: annual total sales/revenue.
-   - headcount: total number of employees.
-   - cogs: Cost of Goods Sold or Cost of Sales.
-   - payroll: Total wages/salaries expenses.
-   - grossMargin: Gross Margin percentage (0-100).
-   - operatingMargin: Operating profit margin percentage (0-100).
-   - currentAssets: Current Assets from Balance sheet.
-   - currentLiabilities: Current Liabilities from Balance sheet.
-3. Scan for mentions of software systems, bookkeeping packages, digital ERP/CRM tools (e.g. QuickBooks, Xero, Sage, SAP, Excel).
-4. Classify their digital maturity level as exactly 'Low', 'Medium', or 'High' based on these tools and process automation clues.
-5. Formulate 3 to 5 highly practical, specific productivity improvement suggestions tailored to this specific firm's metrics.
-6. Provide a crisp qualitative summary analyzing their bottlenecks and potential growth pathways.
+1. Extract key financial metrics with highest precision. Use null if missing.
+2. Scan for mentions of software systems, bookkeeping packages, or digital ERP/CRM tools.
+3. Classify digital maturity level as 'Low', 'Medium', or 'High'.
+4. Formulate 3 to 5 practical productivity improvement recommendations.
+5. Provide a crisp qualitative summary.
 
-You must return the result as a single JSON object matching the requested schema exactly.`;
+Return the result as a single JSON object matching the requested schema.`;
 
-function extractJSONObject(rawText: string): any {
-  // Strip out reasoning / thinking blocks from thinking models (like gpt-oss, R1, o1)
-  let cleaned = rawText.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
-  cleaned = cleaned.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/i, "").trim();
-  try {
-    return JSON.parse(cleaned);
-  } catch (e1) {
-    const firstBrace = cleaned.indexOf("{");
-    const lastBrace = cleaned.lastIndexOf("}");
-    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-      const candidate = cleaned.slice(firstBrace, lastBrace + 1);
+    function extractJSONObject(rawText: string): any {
+      let cleaned = rawText.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+      cleaned = cleaned.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/i, "").trim();
       try {
-        return JSON.parse(candidate);
-      } catch (e2) {
-        try {
-          const sanitized = candidate
-            .replace(/,\s*([}\]])/g, "$1")
-            .replace(/[\u0000-\u001F\u007F-\u009F]/g, " ");
-          return JSON.parse(sanitized);
-        } catch (e3) {
-          // Fallback below
+        return JSON.parse(cleaned);
+      } catch (e1) {
+        const firstBrace = cleaned.indexOf("{");
+        const lastBrace = cleaned.lastIndexOf("}");
+        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+          const candidate = cleaned.slice(firstBrace, lastBrace + 1);
+          try {
+            return JSON.parse(candidate);
+          } catch (e2) {
+            try {
+              const sanitized = candidate
+                .replace(/,\s*([}\]])/g, "$1")
+                .replace(/[\u0000-\u001F\u007F-\u009F]/g, " ");
+              return JSON.parse(sanitized);
+            } catch (e3) {}
+          }
         }
+        return {};
       }
     }
-    // Return empty object instead of throwing syntax error
-    return {};
-  }
-}
-
-    const preferredProvider = llmConfig.provider;
 
     const tryOllama = async () => {
       let targetUrl = ollamaUrl || "http://localhost:11434";
@@ -564,9 +665,15 @@ function extractJSONObject(rawText: string): any {
         targetUrl = targetUrl.replace("localhost", "host.docker.internal").replace("127.0.0.1", "host.docker.internal");
       }
       console.log(`[Assessment Engine] Calling local Ollama model '${ollamaModel}' at ${targetUrl}...`);
-      const docText = await extractTextForOllama(file.buffer, file.originalname, isPDF);
+      let docText = await extractTextForOllama(file.buffer, file.originalname, isPDF);
+
+      // Cap document text passed to LLM at 50,000 characters
+      if (docText.length > 50000) {
+        docText = docText.slice(0, 50000) + "\n\n[TRUNCATED AT 50,000 CHARACTERS]";
+      }
+
       const jsonFormatGuide = `
-You MUST return ONLY a JSON object (no markdown, no backticks, no codeblocks) with this EXACT structure:
+You MUST return ONLY a JSON object (no markdown, no backticks) with this structure:
 {
   "companyName": "Company Name string or null",
   "revenue": number or null,
@@ -579,8 +686,7 @@ You MUST return ONLY a JSON object (no markdown, no backticks, no codeblocks) wi
   "currentLiabilities": number or null,
   "digitalTools": ["tool1", "tool2"],
   "confidence": number from 0 to 100,
-  "thoughtProcess": "chain of thought reasoning",
-  "extractedJustifications": "notes on metrics locations",
+  "extractedJustifications": "evidence notes and citations",
   "digitalMaturityLevel": "Low" or "Medium" or "High",
   "recommendations": ["suggestion 1", "suggestion 2"],
   "qualitativeAnalysis": "analysis summary text"
@@ -588,7 +694,7 @@ You MUST return ONLY a JSON object (no markdown, no backticks, no codeblocks) wi
 `;
       const fullPrompt = `${promptText}\n\n${jsonFormatGuide}\n\nDOCUMENT TEXT CONTENT:\n${docText}`;
 
-      const isThinkingModel = ollamaModel.toLowerCase().includes("gpt-oss") || ollamaModel.toLowerCase().includes("r1") || ollamaModel.toLowerCase().includes("qwen") || ollamaModel.toLowerCase().includes("reason");
+      const isThinkingModel = ollamaModel.toLowerCase().includes("gpt-oss") || ollamaModel.toLowerCase().includes("r1") || ollamaModel.toLowerCase().includes("reason");
       const requestBody: any = {
         model: ollamaModel,
         prompt: fullPrompt,
@@ -600,11 +706,11 @@ You MUST return ONLY a JSON object (no markdown, no backticks, no codeblocks) wi
         requestBody.format = "json";
       }
 
-      const res = await fetch(`${targetUrl}/api/generate`, {
+      const res = await fetchWithTimeout(`${targetUrl}/api/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestBody)
-      });
+      }, 120000);
 
       if (!res.ok) {
         const errText = await res.text();
@@ -616,78 +722,129 @@ You MUST return ONLY a JSON object (no markdown, no backticks, no codeblocks) wi
       return extractJSONObject(rawText);
     };
 
+    // Helper: Validate company name candidate
+    function isValidCompanyName(candidate: string): boolean {
+      if (!candidate || candidate.length < 2 || candidate.length > 80) return false;
+      if ((candidate.match(/,/g) || []).length >= 2) return false;
+      const digitCount = (candidate.match(/\d/g) || []).length;
+      const alphaCount = (candidate.match(/[a-zA-Z]/g) || []).length;
+      if (alphaCount > 0 && digitCount / (digitCount + alphaCount) > 0.5) return false;
+      if (alphaCount === 0) return false;
 
-
-// Universal deterministic pre-parsing helper for CSV tables, PDF extracts, and plain text reports
-function preParseUniversalMetrics(text: string, fileName?: string): Partial<FinancialMetrics> {
-  const result: Partial<FinancialMetrics> = {};
-  if (!text) return result;
-
-  // Try parsing as CSV / Table first
-  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-  if (lines.length >= 2 && lines[0].includes(",")) {
-    const headers = lines[0].split(",").map(h => h.trim().toLowerCase());
-    const values = lines[1].split(",").map(v => v.trim());
-    headers.forEach((h, i) => {
-      const valStr = values[i];
-      if (!valStr) return;
-      const num = parseFloat(valStr.replace(/[^0-9.-]/g, ""));
-      if (h.includes("company")) result.companyName = valStr.replace(/['"]/g, "");
-      if (h.includes("revenue") || h.includes("turnover") || h.includes("sales")) if (!isNaN(num)) result.revenue = num;
-      if (h.includes("headcount") || h.includes("employees") || h.includes("staff")) if (!isNaN(num)) result.headcount = Math.round(num);
-      if (h.includes("cogs") || h.includes("cost of sales") || h.includes("direct cost")) if (!isNaN(num)) result.cogs = num;
-      if (h.includes("payroll") || h.includes("wages") || h.includes("salaries")) if (!isNaN(num)) result.payroll = num;
-      if (h.includes("current assets") || h.includes("assets")) if (!isNaN(num)) result.currentAssets = num;
-      if (h.includes("current liabilities") || h.includes("liabilities")) if (!isNaN(num)) result.currentLiabilities = num;
-    });
-  }
-
-  // Check line-by-line key: value or table rows
-  for (const line of lines) {
-    const parts = line.split(/[:,\t]/);
-    if (parts.length >= 2) {
-      const key = parts[0].trim().toLowerCase();
-      const valStr = parts.slice(1).join(" ").trim();
-      const num = parseFloat(valStr.replace(/[^0-9.-]/g, ""));
-      if (!isNaN(num)) {
-        if (key.includes("revenue") || key.includes("turnover") || key === "total sales") result.revenue = result.revenue ?? num;
-        if (key.includes("headcount") || key.includes("employees") || key.includes("staff count")) result.headcount = result.headcount ?? Math.round(num);
-        if (key.includes("cogs") || key.includes("cost of goods sold") || key.includes("cost of sales")) result.cogs = result.cogs ?? num;
-        if (key.includes("payroll") || key.includes("staff payroll") || key.includes("wages") || key.includes("salaries")) result.payroll = result.payroll ?? num;
-        if (key === "gross margin (%)" || key === "gross margin" || key === "gross profit margin (%)") result.grossMargin = result.grossMargin ?? num;
-        if (key === "operating margin (%)" || key === "operating margin") result.operatingMargin = result.operatingMargin ?? num;
+      const lower = candidate.toLowerCase().trim();
+      const financialKeywords = [
+        "revenue", "turnover", "total", "balance", "profit", "loss", "cost",
+        "margin", "assets", "liabilities", "equity", "depreciation", "amortisation",
+        "operating", "gross", "net", "payroll", "wages", "salaries", "tax", "statement", "notes"
+      ];
+      for (const kw of financialKeywords) {
+        if (lower.startsWith(kw)) return false;
       }
-      if (key.includes("company") || key === "name") {
-        if (!result.companyName && valStr.length > 2) result.companyName = valStr.replace(/['"]/g, "");
-      }
+      return true;
     }
-  }
 
-  // Regex fallback across entire text for paragraph statements (e.g. "headcount of 42", "Turnover: 4,200,000")
-  if (result.revenue == null) {
-    const revMatch = text.match(/(?:total\s+)?(?:revenue|turnover)\s*(?:\(turnover\))?\s*[:\-]?\s*£?\s*([0-9,]+(?:\.[0-9]+)?)/i);
-    if (revMatch) result.revenue = parseFloat(revMatch[1].replace(/,/g, ""));
-  }
-  if (result.headcount == null) {
-    const hcMatch = text.match(/(?:headcount|employed|employees|staff)(?: of| around| approx)?\s+(\d+)/i) || text.match(/(\d+)\s+(?:full-time equivalent|employees|staff)/i);
-    if (hcMatch) result.headcount = parseInt(hcMatch[1], 10);
-  }
-  if (result.cogs == null) {
-    const cogsMatch = text.match(/(?:cogs|cost of goods sold|cost of sales)\s*(?:\([a-z]+\))?\s*[:\-]?\s*£?\s*([0-9,]+(?:\.[0-9]+)?)/i);
-    if (cogsMatch) result.cogs = parseFloat(cogsMatch[1].replace(/,/g, ""));
-  }
-  if (result.payroll == null) {
-    const payMatch = text.match(/(?:payroll|wages|salaries|staff payroll & employer ni|staff costs)\s*[:\-]?\s*£?\s*([0-9,]+(?:\.[0-9]+)?)/i);
-    if (payMatch) result.payroll = parseFloat(payMatch[1].replace(/,/g, ""));
-  }
-  if (!result.companyName) {
-    const nameMatch = text.match(/^([A-Z0-9\s.,&'"-]+(?:LTD|LIMITED|LLP|INC|CORP|PLC|GROUP))/im);
-    if (nameMatch) result.companyName = nameMatch[1].trim();
-    else if (fileName) result.companyName = fileName.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ");
-  }
+    // Helper: Parse CSV line respecting quoted strings
+    function parseCSVLine(line: string): string[] {
+      const result: string[] = [];
+      let current = "";
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        if (char === '"') {
+          inQuotes = !inQuotes;
+        } else if (char === ',' && !inQuotes) {
+          result.push(current.trim());
+          current = "";
+        } else {
+          current += char;
+        }
+      }
+      result.push(current.trim());
+      return result;
+    }
 
-  return result;
-}
+    // Pre-parsing helper for deterministic financial extraction
+    function preParseUniversalMetrics(text: string, fileName?: string): Partial<FinancialMetrics> {
+      const result: Partial<FinancialMetrics> = {};
+      if (!text) return result;
+
+      const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      if (lines.length >= 2 && lines[0].includes(",")) {
+        const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase());
+        const values = parseCSVLine(lines[1]);
+        headers.forEach((h, i) => {
+          const valStr = values[i];
+          if (!valStr) return;
+          const num = parseFloat(valStr.replace(/[^0-9.-]/g, ""));
+          if (h.includes("company")) {
+            const cleaned = valStr.replace(/['"]/g, "");
+            if (isValidCompanyName(cleaned)) result.companyName = cleaned;
+          }
+          if (h.includes("revenue") || h.includes("turnover") || h.includes("sales")) if (!isNaN(num)) result.revenue = num;
+          if (h.includes("headcount") || h.includes("employees") || h.includes("staff")) if (!isNaN(num)) result.headcount = Math.round(num);
+          if (h.includes("cogs") || h.includes("cost of sales") || h.includes("direct cost")) if (!isNaN(num)) result.cogs = num;
+          if (h.includes("payroll") || h.includes("wages") || h.includes("salaries")) if (!isNaN(num)) result.payroll = num;
+          if (h.includes("current assets") || h.includes("assets")) if (!isNaN(num)) result.currentAssets = num;
+          if (h.includes("current liabilities") || h.includes("liabilities")) if (!isNaN(num)) result.currentLiabilities = num;
+        });
+      }
+
+      for (const line of lines) {
+        const parts = line.split(/[:,\t]/);
+        if (parts.length >= 2) {
+          const key = parts[0].trim().toLowerCase();
+          const valStr = parts.slice(1).join(" ").trim();
+          const num = parseFloat(valStr.replace(/[^0-9.-]/g, ""));
+          if (!isNaN(num)) {
+            const isNarrativeKey = key.includes("growth") || key.includes("grew") || key.includes("concentration") || key.includes("per employee") || key.includes("per payroll") || key.includes("ratio") || key.includes("benchmark") || key.includes("notes") || key.includes("risk") || key.includes("note");
+            if (!isNarrativeKey) {
+              if (key.includes("revenue") || key.includes("turnover") || key === "total sales") result.revenue = result.revenue ?? num;
+              if (key.includes("headcount") || key.includes("employees") || key.includes("staff count")) result.headcount = result.headcount ?? Math.round(num);
+              if (key.includes("cogs") || key.includes("cost of goods sold") || key.includes("cost of sales")) result.cogs = result.cogs ?? num;
+              if (key.includes("payroll") || key.includes("staff payroll") || key.includes("wages") || key.includes("salaries")) result.payroll = result.payroll ?? num;
+            }
+            if (key === "gross margin (%)" || key === "gross margin" || key === "gross profit margin (%)") result.grossMargin = result.grossMargin ?? num;
+            if (key === "operating margin (%)" || key === "operating margin") result.operatingMargin = result.operatingMargin ?? num;
+          }
+          if (key.includes("company") || key === "name") {
+            if (!result.companyName && isValidCompanyName(valStr.replace(/['"]/g, ""))) {
+              result.companyName = valStr.replace(/['"]/g, "");
+            }
+          }
+        }
+      }
+
+      if (result.revenue == null) {
+        const revMatch = text.match(/(?:total\s+)?(?:revenue|turnover)\s*(?:\(turnover\))?\s*[:\-]?\s*£?\s*([0-9,]+(?:\.[0-9]+)?)/i);
+        if (revMatch) result.revenue = parseFloat(revMatch[1].replace(/,/g, ""));
+      }
+      if (result.headcount == null) {
+        const hcMatch = text.match(/(?:headcount|employed|employees|staff)(?: of| around| approx)?\s+(\d+)/i) || text.match(/(\d+)\s+(?:full-time equivalent|employees|staff)/i);
+        if (hcMatch) result.headcount = parseInt(hcMatch[1], 10);
+      }
+      if (result.cogs == null) {
+        const cogsMatch = text.match(/(?:cogs|cost of goods sold|cost of sales)\s*(?:\([a-z]+\))?\s*[:\-]?\s*£?\s*([0-9,]+(?:\.[0-9]+)?)/i);
+        if (cogsMatch) result.cogs = parseFloat(cogsMatch[1].replace(/,/g, ""));
+      }
+      if (result.payroll == null) {
+        const payMatch = text.match(/(?:payroll|wages|salaries|staff payroll \& employer ni|staff costs)\s*[:\-]?\s*£?\s*([0-9,]+(?:\.[0-9]+)?)/i);
+        if (payMatch) result.payroll = parseFloat(payMatch[1].replace(/,/g, ""));
+      }
+      if (!result.companyName) {
+        const nameMatch = text.match(/^([A-Z0-9\s.,&'"-]+(?:LTD|LIMITED|LLP|INC|CORP|PLC|GROUP))/im);
+        if (nameMatch) {
+          const candidate = nameMatch[1].trim();
+          if (isValidCompanyName(candidate)) {
+            result.companyName = candidate;
+          }
+        }
+        if (!result.companyName && fileName) {
+          result.companyName = fileName.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ");
+        }
+      }
+
+      return result;
+    }
 
     let llmResult: any = {};
     try {
@@ -696,11 +853,9 @@ function preParseUniversalMetrics(text: string, fileName?: string): Partial<Fina
       console.warn(`[Assessment Engine] Ollama generation failed or timed out (${err.message}). Falling back to universal deterministic extraction.`);
     }
 
-    // Extract raw text from file for universal deterministic pre-parsing
-    const docTextForParsing = file.buffer.toString("utf-8");
+    const docTextForParsing = isPDF ? await extractTextForOllama(file.buffer, file.originalname, true) : file.buffer.toString("utf-8");
     const preParsed = preParseUniversalMetrics(docTextForParsing, file.originalname);
 
-    // Override LLM output with exact pre-parsed metrics whenever present for 100% consistency
     const rev = preParsed.revenue ?? llmResult.revenue ?? null;
     const hc = preParsed.headcount ?? llmResult.headcount ?? null;
     const cogsVal = preParsed.cogs ?? llmResult.cogs ?? null;
@@ -708,19 +863,25 @@ function preParseUniversalMetrics(text: string, fileName?: string): Partial<Fina
     const ca = preParsed.currentAssets ?? llmResult.currentAssets ?? null;
     const cl = preParsed.currentLiabilities ?? llmResult.currentLiabilities ?? null;
 
-    // Calculate margins deterministically
+    // Calculate Gross Margin deterministically
     let grossM: number | null = preParsed.grossMargin ?? null;
     if (grossM == null && rev !== null && cogsVal !== null && rev > 0) {
       grossM = Math.round(((rev - cogsVal) / rev) * 100 * 10) / 10;
     } else if (grossM == null && llmResult.grossMargin != null) {
       grossM = Math.round(llmResult.grossMargin * 10) / 10;
     }
+    if (grossM !== null) {
+      grossM = Math.max(-100, Math.min(100, grossM));
+    }
 
+    // Operating Margin: ONLY use explicitly disclosed operating margin/profit.
+    // DO NOT calculate as (Revenue - COGS - Payroll) / Revenue.
     let opM: number | null = preParsed.operatingMargin ?? null;
-    if (opM == null && rev !== null && pay !== null && rev > 0) {
-      opM = Math.round(((rev - (cogsVal || 0) - pay) / rev) * 100 * 10) / 10;
-    } else if (opM == null && llmResult.operatingMargin != null) {
+    if (opM == null && llmResult.operatingMargin != null) {
       opM = Math.round(llmResult.operatingMargin * 10) / 10;
+    }
+    if (opM !== null) {
+      opM = Math.max(-100, Math.min(100, opM));
     }
 
     const companyName = customCompanyName || preParsed.companyName || llmResult.companyName || "SME Enterprise";
@@ -740,12 +901,14 @@ function preParseUniversalMetrics(text: string, fileName?: string): Partial<Fina
       extractedJustifications: llmResult.extractedJustifications || "Extracted using deterministic general ledger analysis."
     };
 
-    // Run scoring engine against benchmarks deterministically
     const { scores, benchmarks } = calculateScores(metrics, sector);
 
-    // Save assessment run to Cloud SQL database linked to authenticated user (if signed in)
-    const id = Math.random().toString(36).substring(2, 11);
-    
+    // Cryptographically secure UUID generation
+    const id = crypto.randomUUID();
+    if (!req.user?.uid) {
+      guestDocumentIds.add(id);
+    }
+
     const newRun: AssessmentRun = {
       id,
       date: new Date().toISOString(),
@@ -775,15 +938,16 @@ function preParseUniversalMetrics(text: string, fileName?: string): Partial<Fina
 
     // Auto-index document into Python RAG service
     try {
+      const FormData = (await import("form-data")).default;
       const formData = new FormData();
       formData.append("doc_id", newRun.id);
-      const blob = new Blob([file.buffer], { type: mimeType });
-      formData.append("file", blob, file.originalname);
+      formData.append("file", file.buffer, { filename: file.originalname, contentType: mimeType });
 
-      fetch("http://127.0.0.1:8000/index", {
+      fetchWithTimeout("http://127.0.0.1:8000/index", {
         method: "POST",
-        body: formData,
-      }).then(r => r.json()).then(resData => {
+        body: formData.getBuffer(),
+        headers: formData.getHeaders(),
+      }, 60000).then(r => r.json()).then(resData => {
         console.log("[RAG Auto-Index] Document successfully indexed:", resData);
       }).catch(err => {
         console.warn("[RAG Auto-Index] Non-blocking index error:", err.message);
@@ -800,96 +964,118 @@ function preParseUniversalMetrics(text: string, fileName?: string): Partial<Fina
     if (errorMsg.includes("RESOURCE_EXHAUSTED") || errorMsg.includes("429") || errorMsg.includes("quota")) {
       errorMsg = "Cloud API quota limits reached and local Ollama model was unavailable. Please retry in a few moments or start Ollama.";
     }
-    res.status(500).json({
-      error: errorMsg
-    });
+    res.status(500).json({ error: errorMsg });
   }
 });
 
-// --- RAG PYTHON MICROSERVICE PROXY ENDPOINTS ---
+// --- RAG PYTHON MICROSERVICE PROXY ENDPOINTS WITH AUTH & OWNERSHIP ---
 
 // Check Python RAG service health
-app.get("/api/rag/health", async (req, res) => {
+app.get("/api/rag/health", optionalAuth, async (req: AuthRequest, res) => {
   try {
-    const response = await fetch("http://127.0.0.1:8000/health");
+    const response = await fetchWithTimeout("http://127.0.0.1:8000/health", {}, 10000);
     const data = await response.json();
     res.json(data);
   } catch (err: any) {
-    res.status(503).json({ status: "offline", error: "RAG microservice unavailable: " + err.message });
+    res.status(503).json({ status: "offline", error: "RAG microservice unavailable." });
   }
 });
 
-// Query RAG system for document context & vector search QA
-app.post("/api/rag/query", async (req, res) => {
+// Query RAG system for document context & vector search QA (Secured & Bounded)
+app.post("/api/rag/query", optionalAuth, async (req: AuthRequest, res) => {
   try {
-    const { doc_id, question, top_k } = req.body;
+    let { doc_id, question, top_k } = req.body;
     if (!doc_id || !question) {
       return res.status(400).json({ error: "doc_id and question are required." });
     }
 
-    const response = await fetch("http://127.0.0.1:8000/query", {
+    // Verify document ownership & authorization
+    const authCheck = await verifyDocumentOwnership(doc_id, req.user?.uid);
+    if (!authCheck.authorized) {
+      return res.status(403).json({ error: authCheck.reason || "Forbidden: You do not have permission to query this document." });
+    }
+
+    // Validate and cap question length (max 500 chars)
+    const sanitizedQuestion = String(question).trim().slice(0, 500);
+
+    // Validate and cap top_k (1 to 10)
+    const sanitizedTopK = Math.min(10, Math.max(1, parseInt(String(top_k), 10) || 6));
+
+    const response = await fetchWithTimeout("http://127.0.0.1:8000/query", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ doc_id, question, top_k: top_k || 4 }),
-    });
+      body: JSON.stringify({ doc_id, question: sanitizedQuestion, top_k: sanitizedTopK }),
+    }, 60000);
 
     const data = await response.json();
     res.status(response.status).json(data);
   } catch (err: any) {
-    res.status(500).json({ error: "Failed to communicate with Python RAG engine: " + err.message });
+    res.status(500).json({ error: "Failed to communicate with Python RAG engine." });
   }
 });
 
-// Manual index document into RAG system
-app.post("/api/rag/index", upload.single("file"), async (req, res) => {
+// Manual index document into RAG system (Secured & Validated)
+app.post("/api/rag/index", optionalAuth, handleUpload, async (req: AuthRequest, res) => {
   try {
     const file = req.file;
     const docId = req.body.doc_id;
-    if (!file || !docId) {
-      return res.status(400).json({ error: "file and doc_id are required." });
+
+    if (!docId) {
+      return res.status(400).json({ error: "doc_id parameter is required." });
     }
 
+    // Verify document ownership
+    const authCheck = await verifyDocumentOwnership(docId, req.user?.uid);
+    if (!authCheck.authorized) {
+      return res.status(403).json({ error: authCheck.reason || "Forbidden: You do not have permission to index this document." });
+    }
+
+    // Validate uploaded file signature and format
+    const valResult = validateUploadedFile(file);
+    if (!valResult.valid || !file) {
+      return res.status(400).json({ error: valResult.error || "Invalid file upload." });
+    }
+
+    const FormData = (await import("form-data")).default;
     const formData = new FormData();
     formData.append("doc_id", docId);
-    const blob = new Blob([file.buffer], { type: file.mimetype });
-    formData.append("file", blob, file.originalname);
+    formData.append("file", file.buffer, { filename: file.originalname, contentType: file.mimetype });
 
-    const response = await fetch("http://127.0.0.1:8000/index", {
+    const response = await fetchWithTimeout("http://127.0.0.1:8000/index", {
       method: "POST",
-      body: formData,
-    });
+      body: formData.getBuffer(),
+      headers: formData.getHeaders(),
+    }, 60000);
 
     const data = await response.json();
     res.status(response.status).json(data);
   } catch (err: any) {
-    res.status(500).json({ error: "Failed to index document in RAG engine: " + err.message });
+    res.status(500).json({ error: "Failed to index document in RAG engine." });
   }
 });
 
-// Catch-all 404 handler for /api routes to prevent HTML response fallthrough to Vite
+// Catch-all 404 handler for /api routes
 app.use("/api/*", (req, res) => {
   res.status(404).json({ error: `API endpoint not found: ${req.method} ${req.originalUrl}` });
 });
 
-// Custom error handling middleware for all API routes to ensure JSON responses instead of HTML fallbacks
+// Custom error handling middleware for all API routes
 app.use("/api", (err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error("[API Error Handler]:", err);
+  console.error("[API Error Handler]:", err.message || err);
   res.status(err.status || err.statusCode || 500).json({
-    error: err.message || "An unexpected error occurred on the API server."
+    error: "An unexpected error occurred on the server."
   });
 });
 
 // Serve frontend application based on environment
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
-    // In dev mode, mount Vite as middleware
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
   } else {
-    // In prod, serve compiled static files from dist
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
     app.get("*", (req, res) => {

@@ -1,5 +1,6 @@
 import os
 import io
+import re
 import math
 import logging
 import requests
@@ -9,6 +10,7 @@ from pypdf import PdfReader
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("rag_engine")
+
 
 class RAGEngine:
     def __init__(self):
@@ -49,8 +51,91 @@ class RAGEngine:
 
         return pages
 
-    def create_chunks(self, pages: List[Dict[str, Any]], chunk_size: int = 500, overlap: int = 100) -> List[Dict[str, Any]]:
-        """Chunks page text with sliding window overlap and preserves metadata."""
+    def _detect_sections(self, text: str) -> List[str]:
+        """Splits text into logical sections using header detection.
+
+        Recognises:
+          - Lines of '=' or '-' (separator bars)
+          - ALL-CAPS header lines (>= 4 chars, >= 60% uppercase alpha)
+          - Lines starting with 'SECTION' or numbered section headers
+        """
+        lines = text.split("\n")
+        section_break_indices: List[int] = []
+
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            if not stripped:
+                continue
+
+            # Separator bars: ===== or -----
+            if len(stripped) >= 10 and (
+                all(c == "=" for c in stripped) or all(c == "-" for c in stripped)
+            ):
+                section_break_indices.append(i)
+                continue
+
+            # ALL-CAPS header lines (at least 4 alpha chars, >=60% uppercase)
+            alpha_chars = [c for c in stripped if c.isalpha()]
+            if len(alpha_chars) >= 4:
+                upper_ratio = sum(1 for c in alpha_chars if c.isupper()) / len(alpha_chars)
+                if upper_ratio >= 0.6 and len(stripped) < 120:
+                    # Check next/prev line for separator bar to confirm it's a real header
+                    has_adjacent_sep = False
+                    for adj in [i - 1, i + 1]:
+                        if 0 <= adj < len(lines):
+                            adj_stripped = lines[adj].strip()
+                            if len(adj_stripped) >= 10 and (
+                                all(c == "=" for c in adj_stripped)
+                                or all(c == "-" for c in adj_stripped)
+                            ):
+                                has_adjacent_sep = True
+                                break
+                    if has_adjacent_sep:
+                        section_break_indices.append(i)
+
+        if not section_break_indices:
+            return [text]
+
+        # Build sections from break points
+        sections: List[str] = []
+        # Include content before the first break
+        prev_idx = 0
+        for brk in section_break_indices:
+            section_text = "\n".join(lines[prev_idx:brk]).strip()
+            if section_text:
+                sections.append(section_text)
+            prev_idx = brk
+
+        # Remaining content after last break
+        tail = "\n".join(lines[prev_idx:]).strip()
+        if tail:
+            sections.append(tail)
+
+        # Filter out tiny fragments (< 30 chars) — merge into previous section
+        merged: List[str] = []
+        for sec in sections:
+            if len(sec) < 30 and merged:
+                merged[-1] = merged[-1] + "\n" + sec
+            else:
+                merged.append(sec)
+
+        return merged if merged else [text]
+
+    def create_chunks(
+        self,
+        pages: List[Dict[str, Any]],
+        chunk_size: int = 400,
+        overlap: int = 150,
+        max_section_chunk: int = 1500,
+    ) -> List[Dict[str, Any]]:
+        """Chunks page text using section-aware splitting with sliding window fallback.
+
+        Strategy:
+          1. Try to split each page into logical sections (by headers/separators).
+          2. If a section is <= max_section_chunk chars, keep it as a single chunk
+             (preserves complete financial tables).
+          3. If a section exceeds max_section_chunk, apply sliding window subdivision.
+        """
         chunks = []
         chunk_counter = 0
 
@@ -58,27 +143,32 @@ class RAGEngine:
             page_num = page_data["page"]
             text = page_data["text"]
 
-            if len(text) <= chunk_size:
-                chunk_counter += 1
-                chunks.append({
-                    "chunk_id": f"p{page_num}_c{chunk_counter}",
-                    "page": page_num,
-                    "text": text
-                })
-                continue
+            # Attempt section-aware splitting
+            sections = self._detect_sections(text)
 
-            start = 0
-            while start < len(text):
-                end = start + chunk_size
-                chunk_text = text[start:end].strip()
-                if chunk_text:
+            for section in sections:
+                if len(section) <= max_section_chunk:
+                    # Keep the entire section as one chunk
                     chunk_counter += 1
                     chunks.append({
                         "chunk_id": f"p{page_num}_c{chunk_counter}",
                         "page": page_num,
-                        "text": chunk_text
+                        "text": section,
                     })
-                start += (chunk_size - overlap)
+                else:
+                    # Sliding window fallback for oversized sections
+                    start = 0
+                    while start < len(section):
+                        end = start + chunk_size
+                        chunk_text = section[start:end].strip()
+                        if chunk_text:
+                            chunk_counter += 1
+                            chunks.append({
+                                "chunk_id": f"p{page_num}_c{chunk_counter}",
+                                "page": page_num,
+                                "text": chunk_text,
+                            })
+                        start += (chunk_size - overlap)
 
         return chunks
 
@@ -135,7 +225,7 @@ class RAGEngine:
             "status": "indexed"
         }
 
-    def search_similar_chunks(self, doc_id: str, query: str, top_k: int = 4) -> List[Dict[str, Any]]:
+    def search_similar_chunks(self, doc_id: str, query: str, top_k: int = 6) -> List[Dict[str, Any]]:
         """Searches vector store for top_k most similar chunks using cosine similarity."""
         if doc_id not in self.vector_store or not self.vector_store[doc_id]:
             return []
@@ -161,7 +251,7 @@ class RAGEngine:
             for item in top_results
         ]
 
-    def query(self, doc_id: str, question: str, top_k: int = 5) -> Dict[str, Any]:
+    def query(self, doc_id: str, question: str, top_k: int = 6) -> Dict[str, Any]:
         """Queries the vector index using local Ollama qwen2.5:7b model."""
         relevant_chunks = self.search_similar_chunks(doc_id, question, top_k=top_k)
 
@@ -223,3 +313,4 @@ class RAGEngine:
 
 # Global singleton instance
 rag_engine = RAGEngine()
+

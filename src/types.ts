@@ -31,8 +31,8 @@ export interface AssessmentScores {
   };
   financialHealthScore: number; // 0-50
   financialDetails: {
-    grossMargin: number;
-    operatingMargin: number;
+    grossMargin: number | null;
+    operatingMargin: number | null;
     currentRatio: number;
     grossMarginBenchmark: number;
     operatingMarginBenchmark: number;

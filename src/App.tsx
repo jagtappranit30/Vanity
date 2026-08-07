@@ -1,16 +1,14 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { Layers, Award, ShieldAlert, Cpu, Lightbulb, FileText, BarChart3, HelpCircle, X, LogIn, Database, CheckCircle, ArrowRight, Users, Sun, Moon } from "lucide-react";
+import { Layers, Award, ShieldAlert, Cpu, Lightbulb, FileText, BarChart3, HelpCircle, X, LogIn, Database, CheckCircle, ArrowRight, Users } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { AssessmentRun } from "./types";
 import { useAuth } from "./context/AuthContext.tsx";
-import { useTheme } from "./context/ThemeContext.tsx";
 import UploadForm from "./components/UploadForm";
 import ResultsDashboard from "./components/ResultsDashboard";
 import HistoryList from "./components/HistoryList";
 import { VantlyLogo } from "./components/VantlyLogo";
 
 export default function App() {
-  const { theme, toggleTheme } = useTheme();
   const { user, idToken, loading, signInWithGoogle, signOut } = useAuth();
   const [isGuestMode, setIsGuestMode] = useState<boolean>(() => {
     return localStorage.getItem("vantly_guest_mode") === "true";
@@ -220,29 +218,22 @@ export default function App() {
   // If not logged in, show beautiful academic Bento Grid login screen
   if (!user && !isGuestMode) {
     return (
-      <div id="login-landing-container" className="min-h-screen flex flex-col bg-zinc-50 dark:bg-zinc-950 text-zinc-800 dark:text-zinc-100 transition-colors duration-300">
-        <header className="w-full bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 px-6 py-4.5 transition-colors duration-300">
+      <div id="login-landing-container" className="min-h-screen flex flex-col bg-zinc-50 text-zinc-800 transition-colors duration-300">
+        <header className="w-full bg-white border-b border-zinc-200 px-6 py-4.5 transition-colors duration-300">
           <div className="max-w-7xl mx-auto flex items-center justify-between">
             <div className="flex items-center gap-3">
               <VantlyLogo className="w-10 h-10" />
               <div>
-                <span className="block font-display font-black text-base tracking-tight text-zinc-950 dark:text-white">
+                <span className="block font-display font-black text-base tracking-tight text-zinc-950 ">
                   Vantly
                 </span>
-                <span className="block text-[9px] font-extrabold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest leading-none mt-1">
+                <span className="block text-[9px] font-extrabold text-indigo-600 uppercase tracking-widest leading-none mt-1">
                   See your business clearly
                 </span>
               </div>
             </div>
             <div className="flex items-center gap-4">
-              <button
-                onClick={toggleTheme}
-                className="p-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-350 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-all cursor-pointer border border-zinc-200/50 dark:border-zinc-700/80"
-                title={theme === "light" ? "Switch to Dark Mode" : "Switch to Light Mode"}
-              >
-                {theme === "light" ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
-              </button>
-              <div className="flex items-center gap-1.5 text-[10px] font-bold text-zinc-450 dark:text-zinc-400 uppercase tracking-widest">
+              <div className="flex items-center gap-1.5 text-[10px] font-bold text-zinc-450 uppercase tracking-widest">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                 Secure Cloud Core
               </div>
@@ -326,29 +317,29 @@ export default function App() {
             </div>
 
             {/* Login Control Bento Block */}
-            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-[2.5rem] p-10 shadow-sm flex flex-col justify-between items-center text-center min-h-[380px] transition-colors duration-300">
+            <div className="bg-white border border-zinc-200 rounded-[2.5rem] p-10 shadow-sm flex flex-col justify-between items-center text-center min-h-[380px] transition-colors duration-300">
               <div className="w-full">
-                <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto mb-4 border border-indigo-100/50 dark:border-indigo-900/30">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto mb-4 border border-indigo-100/50 ">
                   <LogIn className="w-5 h-5" />
                 </div>
-                <h2 className="text-xl font-display font-black text-zinc-950 dark:text-white mb-2 tracking-tight">
+                <h2 className="text-xl font-display font-black text-zinc-950 mb-2 tracking-tight">
                   Access Portal
                 </h2>
-                <p className="text-zinc-500 dark:text-zinc-400 text-xs leading-relaxed max-w-xs mx-auto font-semibold">
+                <p className="text-zinc-500 text-xs leading-relaxed max-w-xs mx-auto font-semibold">
                   Sign in with Google to sync across devices and export to Docs, or explore instantly with Direct Guest Access.
                 </p>
               </div>
 
               <div className="w-full space-y-3 my-6">
                 {authError && (
-                  <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 rounded-xl text-left flex items-start gap-2 text-2xs text-rose-600 dark:text-rose-400">
+                  <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-left flex items-start gap-2 text-2xs text-rose-600 ">
                     <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
                     <span>{authError}</span>
                   </div>
                 )}
                 <button
                   onClick={handleSignInWithGoogle}
-                  className="w-full py-3.5 px-6 bg-zinc-900 dark:bg-zinc-800 hover:bg-zinc-850 dark:hover:bg-zinc-700 text-white font-bold text-xs rounded-2xl flex items-center justify-center gap-3 shadow-md hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer border border-transparent dark:border-zinc-700"
+                  className="w-full py-3.5 px-6 bg-zinc-900 hover:bg-zinc-850 text-white font-bold text-xs rounded-2xl flex items-center justify-center gap-3 shadow-md hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer border border-transparent "
                 >
                   <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
                     <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -361,53 +352,53 @@ export default function App() {
 
                 <button
                   onClick={handleEnterAsGuest}
-                  className="w-full py-3.5 px-6 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 font-bold text-xs rounded-2xl flex items-center justify-center gap-2 border border-indigo-150/40 dark:border-indigo-900/40 hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer shadow-2xs"
+                  className="w-full py-3.5 px-6 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 font-bold text-xs rounded-2xl flex items-center justify-center gap-2 border border-indigo-150/40 hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer shadow-2xs"
                 >
                   <ArrowRight className="w-4 h-4 shrink-0 animate-pulse" />
                   Direct Access (Guest Mode)
                 </button>
               </div>
 
-              <div className="text-[9px] text-zinc-400 dark:text-zinc-500 font-bold uppercase tracking-widest">
+              <div className="text-[9px] text-zinc-400 font-bold uppercase tracking-widest">
                 No registration required for guest sessions
               </div>
             </div>
 
             {/* Minor Info Bento blocks */}
-            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-[2rem] p-6.5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between min-h-[170px] duration-300">
+            <div className="bg-white border border-zinc-200 rounded-[2rem] p-6.5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between min-h-[170px] duration-300">
               <div>
-                <div className="w-8 h-8 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/45 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mb-3.5 border border-indigo-100/30 dark:border-indigo-900/20">
+                <div className="w-8 h-8 rounded-xl bg-indigo-50/70 text-indigo-600 flex items-center justify-center mb-3.5 border border-indigo-100/30 ">
                   <Users className="w-4 h-4" />
                 </div>
-                <span className="block text-indigo-600 dark:text-indigo-400 text-[10px] font-bold uppercase tracking-widest mb-1">Labour Pillar</span>
-                <h4 className="font-bold text-zinc-900 dark:text-white text-xs mb-1">Leverage & Personnel Output</h4>
-                <p className="text-zinc-500 dark:text-zinc-400 text-[10px] leading-relaxed font-semibold">
+                <span className="block text-indigo-600 text-[10px] font-bold uppercase tracking-widest mb-1">Labour Pillar</span>
+                <h4 className="font-bold text-zinc-900 text-xs mb-1">Leverage & Personnel Output</h4>
+                <p className="text-zinc-500 text-[10px] leading-relaxed font-semibold">
                   Evaluates employee productivity metrics and payroll costs against certified regional SME datasets.
                 </p>
               </div>
             </div>
 
-            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-[2rem] p-6.5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between min-h-[170px] duration-300">
+            <div className="bg-white border border-zinc-200 rounded-[2rem] p-6.5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between min-h-[170px] duration-300">
               <div>
-                <div className="w-8 h-8 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/45 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mb-3.5 border border-indigo-100/30 dark:border-indigo-900/20">
+                <div className="w-8 h-8 rounded-xl bg-indigo-50/70 text-indigo-600 flex items-center justify-center mb-3.5 border border-indigo-100/30 ">
                   <BarChart3 className="w-4 h-4" />
                 </div>
-                <span className="block text-indigo-600 dark:text-indigo-400 text-[10px] font-bold uppercase tracking-widest mb-1">Financial Pillar</span>
-                <h4 className="font-bold text-zinc-900 dark:text-white text-xs mb-1">Margin & Defensive Liquidity</h4>
-                <p className="text-zinc-500 dark:text-zinc-400 text-[10px] leading-relaxed font-semibold">
+                <span className="block text-indigo-600 text-[10px] font-bold uppercase tracking-widest mb-1">Financial Pillar</span>
+                <h4 className="font-bold text-zinc-900 text-xs mb-1">Margin & Defensive Liquidity</h4>
+                <p className="text-zinc-500 text-[10px] leading-relaxed font-semibold">
                   Applies exact margin benchmarks and current ratio liquidity checks to analyze SME operating headroom.
                 </p>
               </div>
             </div>
 
-            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-[2rem] p-6.5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between min-h-[170px] duration-300">
+            <div className="bg-white border border-zinc-200 rounded-[2rem] p-6.5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between min-h-[170px] duration-300">
               <div>
-                <div className="w-8 h-8 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/45 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mb-3.5 border border-indigo-100/30 dark:border-indigo-900/20">
+                <div className="w-8 h-8 rounded-xl bg-indigo-50/70 text-indigo-600 flex items-center justify-center mb-3.5 border border-indigo-100/30 ">
                   <FileText className="w-4 h-4" />
                 </div>
-                <span className="block text-indigo-600 dark:text-indigo-400 text-[10px] font-bold uppercase tracking-widest mb-1">Workspace Integration</span>
-                <h4 className="font-bold text-zinc-900 dark:text-white text-xs mb-1">Direct Google Docs Export</h4>
-                <p className="text-zinc-500 dark:text-zinc-400 text-[10px] leading-relaxed font-semibold">
+                <span className="block text-indigo-600 text-[10px] font-bold uppercase tracking-widest mb-1">Workspace Integration</span>
+                <h4 className="font-bold text-zinc-900 text-xs mb-1">Direct Google Docs Export</h4>
+                <p className="text-zinc-500 text-[10px] leading-relaxed font-semibold">
                   Export dynamic, fully formatted business assessment reports straight into Google Docs via Workspace APIs.
                 </p>
               </div>
@@ -415,7 +406,7 @@ export default function App() {
           </div>
         </main>
 
-        <footer className="w-full bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800 py-6 px-6 mt-auto text-center text-[9px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 transition-colors duration-300">
+        <footer className="w-full bg-white border-t border-zinc-200 py-6 px-6 mt-auto text-center text-[9px] font-bold uppercase tracking-widest text-zinc-400 transition-colors duration-300">
           Vantly AI • See your business clearly
         </footer>
       </div>
@@ -424,17 +415,17 @@ export default function App() {
 
   // If logged in, show full application workspace
   return (
-    <div className="min-h-full flex flex-col bg-zinc-50 dark:bg-zinc-950 text-zinc-800 dark:text-zinc-100 transition-colors duration-300">
+    <div className="min-h-full flex flex-col bg-zinc-50 text-zinc-800 transition-colors duration-300">
       {/* Platform Header */}
-      <header className="sticky top-0 z-20 w-full bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 shadow-[0_8px_30px_rgb(0,0,0,0.02)] px-6 py-4 transition-colors duration-300">
+      <header className="sticky top-0 z-20 w-full bg-white border-b border-zinc-200 shadow-[0_8px_30px_rgb(0,0,0,0.02)] px-6 py-4 transition-colors duration-300">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <VantlyLogo className="w-10 h-10" />
             <div>
-              <span className="block font-display font-black text-base tracking-tight text-zinc-950 dark:text-white">
+              <span className="block font-display font-black text-base tracking-tight text-zinc-950 ">
                 Vantly
               </span>
-              <span className="block text-4xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest leading-none mt-1">
+              <span className="block text-4xs font-bold text-indigo-600 uppercase tracking-widest leading-none mt-1">
                 See your business clearly
               </span>
             </div>
@@ -442,21 +433,13 @@ export default function App() {
 
           <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
             <button
-              onClick={toggleTheme}
-              className="p-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-all cursor-pointer shadow-xs border border-zinc-200/50 dark:border-zinc-700"
-              title={theme === "light" ? "Switch to Dark Mode" : "Switch to Light Mode"}
-            >
-              {theme === "light" ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
-            </button>
-
-            <button
               onClick={() => setShowInfoModal(true)}
-              className="px-3 py-1.5 text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 rounded-xl bg-indigo-50/50 dark:bg-indigo-950/40 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 transition-all cursor-pointer flex items-center gap-1.5 text-xs font-bold"
+              className="px-3 py-1.5 text-indigo-600 hover:text-indigo-700 rounded-xl bg-indigo-50/50 hover:bg-indigo-50 transition-all cursor-pointer flex items-center gap-1.5 text-xs font-bold"
             >
               <HelpCircle className="w-4 h-4" />
               Academic Specs
             </button>
-            <div className="h-5 w-[1px] bg-zinc-200 dark:bg-zinc-850"></div>
+            <div className="h-5 w-[1px] bg-zinc-200 "></div>
 
             {user ? (
               <div className="flex items-center gap-3">
@@ -464,21 +447,21 @@ export default function App() {
                   <img
                     src={user.photoURL}
                     alt={user.displayName || "Researcher"}
-                    className="w-8 h-8 rounded-full border border-zinc-200 dark:border-zinc-800"
+                    className="w-8 h-8 rounded-full border border-zinc-200 "
                     referrerPolicy="no-referrer"
                   />
                 )}
                 <div className="hidden md:block text-right">
-                  <span className="block text-xs font-bold text-zinc-900 dark:text-zinc-100 leading-none">
+                  <span className="block text-xs font-bold text-zinc-900 leading-none">
                     {user.displayName || "Academic Researcher"}
                   </span>
-                  <span className="text-4xs text-zinc-400 dark:text-zinc-550 font-semibold truncate max-w-[150px] block mt-0.5">
+                  <span className="text-4xs text-zinc-400 font-semibold truncate max-w-[150px] block mt-0.5">
                     {user.email}
                   </span>
                 </div>
                 <button
                   onClick={signOut}
-                  className="px-3 py-1.5 text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-50/50 dark:bg-rose-950/30 hover:bg-rose-50 dark:hover:bg-rose-950/50 hover:text-rose-750 border border-rose-100 dark:border-rose-900/50 rounded-xl transition-all cursor-pointer"
+                  className="px-3 py-1.5 text-xs font-bold text-rose-600 bg-rose-50/50 hover:bg-rose-50 hover:text-rose-750 border border-rose-100 rounded-xl transition-all cursor-pointer"
                 >
                   Sign Out
                 </button>
@@ -486,10 +469,10 @@ export default function App() {
             ) : (
               <div className="flex items-center gap-3">
                 <div className="hidden md:block text-right">
-                  <span className="block text-xs font-bold text-zinc-900 dark:text-zinc-100 leading-none">
+                  <span className="block text-xs font-bold text-zinc-900 leading-none">
                     Guest Session
                   </span>
-                  <span className="text-4xs text-amber-600 dark:text-amber-500 font-bold uppercase tracking-wider block mt-0.5">
+                  <span className="text-4xs text-amber-600 font-bold uppercase tracking-wider block mt-0.5">
                     Local Storage Mode
                   </span>
                 </div>
@@ -501,7 +484,7 @@ export default function App() {
                 </button>
                 <button
                   onClick={handleExitGuestMode}
-                  className="px-3 py-1.5 text-xs font-bold text-zinc-600 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-zinc-100 rounded-xl transition-all cursor-pointer border border-zinc-200 dark:border-zinc-700/60"
+                  className="px-3 py-1.5 text-xs font-bold text-zinc-600 bg-zinc-100 hover:bg-zinc-200 hover:text-zinc-900 rounded-xl transition-all cursor-pointer border border-zinc-200 "
                 >
                   Exit
                 </button>
@@ -515,7 +498,7 @@ export default function App() {
       <main className="flex-1 w-full max-w-7xl mx-auto px-6 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           {/* Left Sidebar: Assessment Records */}
-          <div className="lg:col-span-1 border-b lg:border-b-0 lg:border-r border-zinc-200 dark:border-zinc-800 pb-8 lg:pb-0 lg:pr-8">
+          <div className="lg:col-span-1 border-b lg:border-b-0 lg:border-r border-zinc-200 pb-8 lg:pb-0 lg:pr-8">
             <HistoryList
               history={history}
               selectedId={selectedAssessment?.id || null}
@@ -567,7 +550,7 @@ export default function App() {
       </main>
 
       {/* Footer credits */}
-      <footer className="w-full bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800 py-6 px-6 mt-auto text-center text-4xs text-zinc-400 dark:text-zinc-500 font-bold uppercase tracking-widest transition-colors duration-300">
+      <footer className="w-full bg-white border-t border-zinc-200 py-6 px-6 mt-auto text-center text-4xs text-zinc-400 font-bold uppercase tracking-widest transition-colors duration-300">
         Vantly • See your business clearly • Powered by Ollama & Cloud SQL
       </footer>
 
@@ -589,49 +572,49 @@ export default function App() {
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="bg-white dark:bg-zinc-900 rounded-[2rem] border border-zinc-200 dark:border-zinc-800 shadow-2xl max-w-2xl w-full p-8 relative z-10 max-h-[90vh] overflow-y-auto transition-colors duration-300"
+              className="bg-white rounded-[2rem] border border-zinc-200 shadow-2xl max-w-2xl w-full p-8 relative z-10 max-h-[90vh] overflow-y-auto transition-colors duration-300"
             >
               <button
                 onClick={() => setShowInfoModal(false)}
-                className="absolute top-6 right-6 p-1.5 rounded-xl text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 cursor-pointer transition-colors"
+                className="absolute top-6 right-6 p-1.5 rounded-xl text-zinc-400 hover:text-zinc-600 hover:bg-zinc-50 cursor-pointer transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
 
-              <h2 className="text-2xl font-display font-black text-zinc-950 dark:text-white mb-6 flex items-center gap-2">
-                <Award className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
+              <h2 className="text-2xl font-display font-black text-zinc-950 mb-6 flex items-center gap-2">
+                <Award className="w-6 h-6 text-indigo-600 " />
                 MSc Academic Evaluation Metrics
               </h2>
 
-              <div className="space-y-6 text-zinc-600 dark:text-zinc-300 text-sm leading-relaxed">
+              <div className="space-y-6 text-zinc-600 text-sm leading-relaxed">
                 <div>
-                  <h4 className="font-bold text-zinc-900 dark:text-zinc-100 uppercase tracking-wider text-xs mb-1.5">
+                  <h4 className="font-bold text-zinc-900 uppercase tracking-wider text-xs mb-1.5">
                     1. Labour Efficiency Pillar (0 - 50 Score)
                   </h4>
                   <p className="mb-2 font-medium">
                     Measures employee resource utilization. Compares company metrics directly against Nottingham's certified SME sectoral percentiles:
                   </p>
-                  <ul className="list-disc list-inside space-y-1 bg-zinc-50 dark:bg-zinc-950 p-4 rounded-xl border border-zinc-150 dark:border-zinc-850 font-mono text-2xs text-zinc-700 dark:text-zinc-300">
+                  <ul className="list-disc list-inside space-y-1 bg-zinc-50 p-4 rounded-xl border border-zinc-150 font-mono text-2xs text-zinc-700 ">
                     <li>Component A (25 pts): Revenue per Employee = (Revenue / Headcount) vs Sector Median</li>
                     <li>Component B (25 pts): Payroll leverage = (Revenue / Payroll costs) vs Sector Median</li>
                   </ul>
                 </div>
 
                 <div>
-                  <h4 className="font-bold text-zinc-900 dark:text-zinc-100 uppercase tracking-wider text-xs mb-1.5">
+                  <h4 className="font-bold text-zinc-900 uppercase tracking-wider text-xs mb-1.5">
                     2. Financial Health Pillar (0 - 50 Score)
                   </h4>
                   <p className="mb-2 font-medium">
                     Evaluates operating feasibility, profitability headroom, and liquidity safety runtimes:
                   </p>
-                  <ul className="list-disc list-inside space-y-1 bg-zinc-50 dark:bg-zinc-950 p-4 rounded-xl border border-zinc-150 dark:border-zinc-850 font-mono text-2xs text-zinc-700 dark:text-zinc-300">
+                  <ul className="list-disc list-inside space-y-1 bg-zinc-50 p-4 rounded-xl border border-zinc-150 font-mono text-2xs text-zinc-700 ">
                     <li>Component A (25 pts): Gross & Operating Profit Margins vs Sector Median margins</li>
                     <li>Component B (25 pts): Liquidity ratio = Current Assets / Current Liabilities. Ideals: &ge;1.5</li>
                   </ul>
                 </div>
 
                 <div>
-                  <h4 className="font-bold text-zinc-900 dark:text-zinc-100 uppercase tracking-wider text-xs mb-1.5">
+                  <h4 className="font-bold text-zinc-900 uppercase tracking-wider text-xs mb-1.5">
                     3. Digital Maturity diagnostic (0 - 100 Score)
                   </h4>
                   <p className="font-medium">
@@ -639,7 +622,7 @@ export default function App() {
                   </p>
                 </div>
 
-                <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800 text-4xs font-bold text-zinc-450 dark:text-zinc-500 uppercase tracking-wider">
+                <div className="pt-4 border-t border-zinc-200 text-4xs font-bold text-zinc-450 uppercase tracking-wider">
                   Research Framework: SMEs under 250 employees. Datasets derived from Companies House filings and regional sector analysis (NTU Business School guidelines, 2026).
                 </div>
               </div>

@@ -9,4 +9,7 @@ coverage/
 .git_backup/
 rag_service/venv/
 eval/.venv/
+__pycache__/
+*.pyc
+.claude/settings.local.json
 
