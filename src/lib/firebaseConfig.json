@@ -1,11 +1,9 @@
 {
-  "projectId": "quick-art-467115-m6",
-  "appId": "1:915836304639:web:2e30258211a797e4f460ca",
-  "apiKey": "AIzaSyBjEBBCGJ15BOThIVXhdd-k0gUFxoRfE74",
-  "authDomain": "quick-art-467115-m6.firebaseapp.com",
-  "storageBucket": "quick-art-467115-m6.firebasestorage.app",
-  "messagingSenderId": "915836304639",
-  "measurementId": "",
-  "oAuthClientId": "915836304639-u5q14cslophh0g34osh7qea457nsl6an.apps.googleusercontent.com",
-  "recaptchaSiteKey": ""
+  "projectId": "my-1st-project-4803e",
+  "appId": "1:33896777420:web:4cd73fdeb45509f2946469",
+  "apiKey": "AIzaSyBhHGZvbu4nSRxIzvetOMU6GzZgMO-cJQI",
+  "authDomain": "my-1st-project-4803e.firebaseapp.com",
+  "databaseURL": "https://my-1st-project-4803e.firebaseio.com",
+  "storageBucket": "my-1st-project-4803e.firebasestorage.app",
+  "messagingSenderId": "33896777420"
 }
