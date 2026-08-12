@@ -31,6 +31,7 @@ RUN npm run build
 # Make the entrypoint script executable
 RUN chmod +x entrypoint.sh
 
+ENV PORT=3000
 EXPOSE 3000
 
 ENTRYPOINT ["/app/entrypoint.sh"]
