@@ -156,19 +156,28 @@ def build_ragas_evaluator():
         )
         sys.exit(1)
 
-    llm = LangchainLLMWrapper(
-        ChatOpenAI(
-            model="gpt-4o-mini",
-            openai_api_key=OPENAI_API_KEY,
-            temperature=0.0,  # deterministic scoring
+    try:
+        from openai import OpenAI
+        from ragas.llms import llm_factory
+        from ragas.embeddings import embedding_factory
+        client = OpenAI(api_key=OPENAI_API_KEY)
+        llm = llm_factory("gpt-4o-mini", client=client)
+        embeddings = embedding_factory("openai", model="text-embedding-3-small", client=client)
+    except Exception as fe:
+        console.print(f"[yellow]Falling back to Langchain wrappers due to: {fe}[/yellow]")
+        llm = LangchainLLMWrapper(
+            ChatOpenAI(
+                model="gpt-4o-mini",
+                openai_api_key=OPENAI_API_KEY,
+                temperature=0.0,
+            )
         )
-    )
-    embeddings = LangchainEmbeddingsWrapper(
-        OpenAIEmbeddings(
-            model="text-embedding-3-small",
-            openai_api_key=OPENAI_API_KEY,
+        embeddings = LangchainEmbeddingsWrapper(
+            OpenAIEmbeddings(
+                model="text-embedding-3-small",
+                openai_api_key=OPENAI_API_KEY,
+            )
         )
-    )
 
     metrics = [
         Faithfulness(llm=llm),
