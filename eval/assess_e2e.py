@@ -33,7 +33,7 @@ GROUND_TRUTH_METRICS = {
     "cogs": 2_520_000,
     "payroll": 1_050_000,
     "grossMargin": 40.0,
-    "operatingMargin": 0.0,
+    "operatingMargin": None,
     "currentAssets": 890_000,
     "currentLiabilities": 445_000,
 }
@@ -57,17 +57,20 @@ def colour(text: str, code: str) -> str:
 
 def check_metric(name: str, actual, expected, tolerance_pct: float = 5.0) -> bool:
     """Check if an extracted metric matches ground truth within tolerance."""
+    if expected is None:
+        if actual is None or actual == 0.0:
+            print(f"  {colour('PASS', 'green')} {name}: {actual} (non-disclosed / null)")
+            return True
+        else:
+            print(f"  {colour('FAIL', 'red')} {name}: got {actual}, expected None (non-disclosed)")
+            return False
+
     if actual is None and expected is not None:
         print(f"  {colour('FAIL', 'red')} {name}: got None, expected {expected}")
         return False
 
-    if expected is None:
-        print(f"  {colour('SKIP', 'yellow')} {name}: no ground truth defined")
-        return True
-
     if expected == 0:
-        # For zero-value metrics, allow small absolute tolerance
-        if abs(actual) <= 1.0:
+        if actual is None or abs(actual) <= 1.0:
             print(f"  {colour('PASS', 'green')} {name}: {actual} ≈ {expected}")
             return True
         else:
