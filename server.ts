@@ -14,6 +14,10 @@ import { eq } from "drizzle-orm";
 
 dotenv.config();
 
+const RAG_SERVICE_URL = process.env.RAG_SERVICE_URL || "http://127.0.0.1:8000";
+const RAG_SERVICE_TIMEOUT = parseInt(process.env.RAG_SERVICE_TIMEOUT || "60000", 10);
+console.log(`[RAG Config] Service URL: ${RAG_SERVICE_URL}, Timeout: ${RAG_SERVICE_TIMEOUT}ms`);
+
 // Spawn Python FastAPI RAG Microservice
 let ragProcess: any = null;
 function startRAGService() {
@@ -160,11 +164,14 @@ async function verifyDocumentOwnership(docId: string, userUid?: string): Promise
     if (guestDocumentIds.has(docId)) return { authorized: true };
     try {
       const found = await db.select().from(assessments).where(eq(assessments.id, docId));
-      if (found.length > 0 && found[0].userUid) {
-        return { authorized: false, reason: "Forbidden: Authenticated document cannot be accessed by guests." };
+      if (found.length > 0) {
+        if (found[0].userUid) {
+          return { authorized: false, reason: "Forbidden: Authenticated document cannot be accessed by guests." };
+        }
+        return { authorized: true };
       }
     } catch {}
-    return { authorized: true };
+    return { authorized: false, reason: "Forbidden: Unauthorized or non-existent document ID." };
   }
 }
 
@@ -564,11 +571,11 @@ app.post("/api/assess", optionalAuth, handleUpload, async (req: AuthRequest, res
         const form = new FormData();
         form.append("file", buffer, { filename: originalName || "document.pdf" });
 
-        const extractRes = await fetchWithTimeout("http://127.0.0.1:8000/extract", {
+        const extractRes = await fetchWithTimeout(`${RAG_SERVICE_URL}/extract`, {
           method: "POST",
           body: form.getBuffer(),
           headers: form.getHeaders(),
-        }, 60000);
+        }, RAG_SERVICE_TIMEOUT);
 
         if (extractRes.ok) {
           const data: any = await extractRes.json();
@@ -661,8 +668,15 @@ Return the result as a single JSON object matching the requested schema.`;
 
     const tryOllama = async () => {
       let targetUrl = ollamaUrl || "http://localhost:11434";
-      if (process.env.SQL_HOST === "db" && (targetUrl.includes("localhost") || targetUrl.includes("127.0.0.1"))) {
-        targetUrl = targetUrl.replace("localhost", "host.docker.internal").replace("127.0.0.1", "host.docker.internal");
+      const isDocker = process.env.SQL_HOST === "db";
+      if (isDocker) {
+        if (targetUrl.includes("localhost") || targetUrl.includes("127.0.0.1")) {
+          targetUrl = targetUrl.replace("localhost", "host.docker.internal").replace("127.0.0.1", "host.docker.internal");
+        }
+      } else {
+        if (targetUrl.includes("host.docker.internal")) {
+          targetUrl = targetUrl.replace("host.docker.internal", "127.0.0.1");
+        }
       }
       console.log(`[Assessment Engine] Calling local Ollama model '${ollamaModel}' at ${targetUrl}...`);
       let docText = await extractTextForOllama(file.buffer, file.originalname, isPDF);
@@ -943,11 +957,11 @@ You MUST return ONLY a JSON object (no markdown, no backticks) with this structu
       formData.append("doc_id", newRun.id);
       formData.append("file", file.buffer, { filename: file.originalname, contentType: mimeType });
 
-      fetchWithTimeout("http://127.0.0.1:8000/index", {
+      fetchWithTimeout(`${RAG_SERVICE_URL}/index`, {
         method: "POST",
         body: formData.getBuffer(),
         headers: formData.getHeaders(),
-      }, 60000).then(r => r.json()).then(resData => {
+      }, RAG_SERVICE_TIMEOUT).then(r => r.json()).then(resData => {
         console.log("[RAG Auto-Index] Document successfully indexed:", resData);
       }).catch(err => {
         console.warn("[RAG Auto-Index] Non-blocking index error:", err.message);
@@ -973,7 +987,7 @@ You MUST return ONLY a JSON object (no markdown, no backticks) with this structu
 // Check Python RAG service health
 app.get("/api/rag/health", optionalAuth, async (req: AuthRequest, res) => {
   try {
-    const response = await fetchWithTimeout("http://127.0.0.1:8000/health", {}, 10000);
+    const response = await fetchWithTimeout(`${RAG_SERVICE_URL}/health`, {}, 10000);
     const data = await response.json();
     res.json(data);
   } catch (err: any) {
@@ -1001,11 +1015,11 @@ app.post("/api/rag/query", optionalAuth, async (req: AuthRequest, res) => {
     // Validate and cap top_k (1 to 10)
     const sanitizedTopK = Math.min(10, Math.max(1, parseInt(String(top_k), 10) || 6));
 
-    const response = await fetchWithTimeout("http://127.0.0.1:8000/query", {
+    const response = await fetchWithTimeout(`${RAG_SERVICE_URL}/query`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ doc_id, question: sanitizedQuestion, top_k: sanitizedTopK }),
-    }, 60000);
+    }, RAG_SERVICE_TIMEOUT);
 
     const data = await response.json();
     res.status(response.status).json(data);
@@ -1041,11 +1055,11 @@ app.post("/api/rag/index", optionalAuth, handleUpload, async (req: AuthRequest, 
     formData.append("doc_id", docId);
     formData.append("file", file.buffer, { filename: file.originalname, contentType: file.mimetype });
 
-    const response = await fetchWithTimeout("http://127.0.0.1:8000/index", {
+    const response = await fetchWithTimeout(`${RAG_SERVICE_URL}/index`, {
       method: "POST",
       body: formData.getBuffer(),
       headers: formData.getHeaders(),
-    }, 60000);
+    }, RAG_SERVICE_TIMEOUT);
 
     const data = await response.json();
     res.status(response.status).json(data);

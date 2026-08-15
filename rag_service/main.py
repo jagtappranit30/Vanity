@@ -62,20 +62,29 @@ async def extract_document_text(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Text extraction failed: {str(e)}")
 
+from fastapi.responses import JSONResponse
+
 @app.post("/query")
 def query_document(req: QueryRequest):
     try:
         if not req.doc_id or not req.question:
-            raise HTTPException(status_code=400, detail="Missing required parameters: doc_id and question.")
+            return JSONResponse(
+                content={"error": "Missing required parameters: doc_id and question."},
+                status_code=400
+            )
 
         result = rag_engine.query(
             doc_id=req.doc_id,
             question=req.question,
             top_k=req.top_k or 4
         )
-        return result
+        status_code = result.pop("status", 200)
+        return JSONResponse(content=result, status_code=status_code)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"RAG query execution failed: {str(e)}")
+        return JSONResponse(
+            content={"error": f"RAG query execution failed: {str(e)}"},
+            status_code=500
+        )
 
 if __name__ == "__main__":
     port = int(os.environ.get("RAG_PORT", 8000))

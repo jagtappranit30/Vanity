@@ -2,6 +2,7 @@ import os
 import io
 import re
 import math
+import json
 import logging
 import requests
 from typing import List, Dict, Any, Optional
@@ -15,17 +16,96 @@ logger = logging.getLogger("rag_engine")
 class RAGEngine:
     def __init__(self):
         self.ollama_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
-        self.ollama_model = os.environ.get("OLLAMA_MODEL", "qwen2.5:7b")
+        self.ollama_model = os.environ.get("RAG_MODEL") or os.environ.get("OLLAMA_MODEL", "qwen2.5:7b")
+        self.storage_file = os.environ.get("VECTOR_STORE_FILE", os.path.join(os.path.dirname(__file__), "vector_store.json"))
 
-        # In-memory vector store structure:
+        # Vector store structure:
         # { doc_id: [{ "id": str, "text": str, "page": int, "embedding": np.ndarray }] }
         self.vector_store: Dict[str, List[Dict[str, Any]]] = {}
+        self._fast_embed_model = None
+        self._fast_embed_initialized = False
+
+        # Load persisted vector store from disk on startup
+        self._load_vector_store()
+
+    def _load_vector_store(self):
+        """Loads vector store chunks and embeddings from disk persistence."""
+        if not os.path.exists(self.storage_file):
+            logger.info(f"No existing vector store file found at '{self.storage_file}'. Starting fresh.")
+            return
+
+        try:
+            with open(self.storage_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+
+            loaded_count = 0
+            for doc_id, chunks in data.items():
+                parsed_chunks = []
+                for c in chunks:
+                    parsed_chunks.append({
+                        "chunk_id": c["chunk_id"],
+                        "page": c["page"],
+                        "text": c["text"],
+                        "embedding": np.array(c["embedding"], dtype=np.float32)
+                    })
+                self.vector_store[doc_id] = parsed_chunks
+                loaded_count += len(parsed_chunks)
+
+            logger.info(f"Loaded {len(self.vector_store)} documents ({loaded_count} total chunks) from '{self.storage_file}'.")
+        except Exception as e:
+            logger.error(f"Failed to load vector store from disk: {e}")
+
+    def _save_vector_store(self):
+        """Saves current vector store to disk file for persistence across restarts."""
+        try:
+            serializable_store = {}
+            for doc_id, chunks in self.vector_store.items():
+                serializable_store[doc_id] = [
+                    {
+                        "chunk_id": c["chunk_id"],
+                        "page": c["page"],
+                        "text": c["text"],
+                        "embedding": c["embedding"].tolist()
+                    }
+                    for c in chunks
+                ]
+
+            temp_file = f"{self.storage_file}.tmp"
+            with open(temp_file, "w", encoding="utf-8") as f:
+                json.dump(serializable_store, f)
+            os.replace(temp_file, self.storage_file)
+            logger.info(f"Persisted vector store ({len(self.vector_store)} documents) to '{self.storage_file}'.")
+        except Exception as e:
+            logger.error(f"Failed to save vector store to disk: {e}")
+
+    def _get_fast_embed_model(self):
+        """Lazy-loads FastEmbed model for semantic fallback when Ollama is unavailable."""
+        if not self._fast_embed_initialized:
+            try:
+                from fastembed import TextEmbedding
+                cache_dir = os.environ.get("FASTEMBED_CACHE_DIR", "/tmp/fastembed")
+                self._fast_embed_model = TextEmbedding(
+                    model_name="BAAI/bge-small-en-v1.5",
+                    cache_dir=cache_dir
+                )
+                self._fast_embed_initialized = True
+                logger.info("FastEmbed bge-small-en-v1.5 model initialized successfully.")
+            except Exception as e:
+                logger.warning(f"FastEmbed initialization skipped/failed: {e}")
+                self._fast_embed_model = None
+                self._fast_embed_initialized = True
+        return self._fast_embed_model
 
     def _resolve_ollama_url(self) -> str:
-        """Returns the correct Ollama URL, adjusting for Docker networking."""
+        """Returns the correct Ollama URL, adjusting for Docker vs local host networking."""
         url = self.ollama_url
-        if os.environ.get("SQL_HOST") == "db" and ("localhost" in url or "127.0.0.1" in url):
-            url = url.replace("localhost", "host.docker.internal").replace("127.0.0.1", "host.docker.internal")
+        is_docker = os.environ.get("SQL_HOST") == "db"
+        if is_docker:
+            if "localhost" in url or "127.0.0.1" in url:
+                url = url.replace("localhost", "host.docker.internal").replace("127.0.0.1", "host.docker.internal")
+        else:
+            if "host.docker.internal" in url:
+                url = url.replace("host.docker.internal", "127.0.0.1")
         return url
 
     def extract_text(self, file_bytes: bytes, file_name: str) -> List[Dict[str, Any]]:
@@ -173,7 +253,7 @@ class RAGEngine:
         return chunks
 
     def _get_embedding(self, text: str) -> np.ndarray:
-        """Generates embedding vector using local Ollama embeddings API with hash fallback."""
+        """Generates embedding vector using local Ollama embeddings API with FastEmbed semantic fallback."""
         ollama_url = self._resolve_ollama_url()
         try:
             resp = requests.post(
@@ -189,19 +269,27 @@ class RAGEngine:
                     norm = np.linalg.norm(vec)
                     return vec / (norm + 1e-10)
         except Exception as e:
-            logger.warning(f"Ollama embedding request failed: {e}. Using hash fallback.")
+            logger.warning(f"Ollama embedding request failed ({e}). Attempting FastEmbed fallback.")
 
-        # Deterministic lightweight hash fallback vector (128 dims)
-        vec = np.zeros(128, dtype=np.float32)
-        words = text.lower().split()
-        for w in words:
-            idx = abs(hash(w)) % 128
-            vec[idx] += 1.0
-        norm = np.linalg.norm(vec)
-        return vec / (norm + 1e-10)
+        # FastEmbed semantic fallback (BGE Small v1.5)
+        try:
+            model = self._get_fast_embed_model()
+            if model is not None:
+                embeddings = list(model.embed([text]))
+                if embeddings and len(embeddings) > 0:
+                    vec = np.array(embeddings[0], dtype=np.float32)
+                    norm = np.linalg.norm(vec)
+                    logger.info(f"Generated semantic fallback embedding using FastEmbed for '{text[:40]}...'")
+                    return vec / (norm + 1e-10)
+        except Exception as fe_err:
+            logger.error(f"FastEmbed fallback generation failed: {fe_err}")
+
+        raise RuntimeError(
+            "Embedding generation failed: Neither Ollama embedding API nor FastEmbed model are available."
+        )
 
     def index_document(self, doc_id: str, file_bytes: bytes, file_name: str) -> Dict[str, Any]:
-        """Indexes a document into the vector store."""
+        """Indexes a document into the vector store and persists to disk."""
         pages = self.extract_text(file_bytes, file_name)
         chunks = self.create_chunks(pages)
 
@@ -217,6 +305,9 @@ class RAGEngine:
 
         self.vector_store[doc_id] = indexed_chunks
         logger.info(f"Indexed document '{doc_id}' with {len(indexed_chunks)} chunks across {len(pages)} pages.")
+
+        # Persist updated vector store to disk
+        self._save_vector_store()
 
         return {
             "doc_id": doc_id,
@@ -252,12 +343,14 @@ class RAGEngine:
         ]
 
     def query(self, doc_id: str, question: str, top_k: int = 6) -> Dict[str, Any]:
-        """Queries the vector index using local Ollama qwen2.5:7b model."""
+        """Queries the vector index using local Ollama Qwen 2.5 (qwen2.5:7b) model."""
         relevant_chunks = self.search_similar_chunks(doc_id, question, top_k=top_k)
 
         if not relevant_chunks:
             return {
+                "status": 404,
                 "answer": f"No indexed content found for document ID '{doc_id}'. Please ensure a financial document has been uploaded.",
+                "error": f"No indexed content found for document ID '{doc_id}'.",
                 "sources": [],
                 "doc_id": doc_id
             }
@@ -268,7 +361,7 @@ class RAGEngine:
         ])
 
         system_prompt = (
-            "You are Vantly's Financial Document Assistant. Your job is to answer user questions about "
+            "You are Vantly's Financial Document Assistant powered by Qwen 2.5. Your job is to answer user questions about "
             "financial statements using ONLY the provided document context snippets.\n"
             "STRICT RULES:\n"
             "1. Base your answer strictly on the provided context snippets.\n"
@@ -281,7 +374,7 @@ class RAGEngine:
 
         ollama_url = self._resolve_ollama_url()
         model_name = self.ollama_model
-        logger.info(f"[RAG Query] Provider: OLLAMA | Model: {model_name} | URL: {ollama_url}")
+        logger.info(f"[RAG Query] Provider: OLLAMA | Model: {model_name} (Qwen 2.5) | URL: {ollama_url}")
 
         answer = ""
         try:
@@ -303,9 +396,16 @@ class RAGEngine:
             logger.warning(f"Ollama query failed: {e}")
 
         if not answer:
-            answer = "RAG context retrieved successfully:\n\n" + "\n".join([f"• Page {c['page']}: {c['text'][:150]}..." for c in relevant_chunks])
+            return {
+                "status": 500,
+                "answer": "RAG context retrieved, but local Qwen 2.5 model generation failed or timed out:\n\n" + "\n".join([f"• Page {c['page']}: {c['text'][:150]}..." for c in relevant_chunks]),
+                "error": "LLM generation failed or Ollama unreachable.",
+                "sources": relevant_chunks,
+                "doc_id": doc_id
+            }
 
         return {
+            "status": 200,
             "answer": answer,
             "sources": relevant_chunks,
             "doc_id": doc_id

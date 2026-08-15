@@ -4,3 +4,4 @@ pypdf>=3.10.0
 numpy>=1.24.0
 python-multipart>=0.0.6
 requests>=2.31.0
+fastembed>=0.2.0
