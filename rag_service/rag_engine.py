@@ -316,10 +316,15 @@ class RAGEngine:
             "status": "indexed"
         }
 
-    def search_similar_chunks(self, doc_id: str, query: str, top_k: int = 6) -> List[Dict[str, Any]]:
-        """Searches vector store for top_k most similar chunks using cosine similarity."""
+    def search_similar_chunks(
+        self, doc_id: str, query: str, top_k: int = 6, min_similarity: Optional[float] = None
+    ) -> List[Dict[str, Any]]:
+        """Searches vector store for top_k most similar chunks using cosine similarity, filtered by min_similarity threshold."""
         if doc_id not in self.vector_store or not self.vector_store[doc_id]:
             return []
+
+        if min_similarity is None:
+            min_similarity = float(os.environ.get("RAG_MIN_SIMILARITY", "0.25"))
 
         query_emb = self._get_embedding(query)
         chunks = self.vector_store[doc_id]
@@ -327,7 +332,8 @@ class RAGEngine:
         results = []
         for c in chunks:
             sim = float(np.dot(query_emb, c["embedding"]))
-            results.append((sim, c))
+            if sim >= min_similarity:
+                results.append((sim, c))
 
         results.sort(key=lambda x: x[0], reverse=True)
         top_results = results[:top_k]
@@ -344,13 +350,21 @@ class RAGEngine:
 
     def query(self, doc_id: str, question: str, top_k: int = 6) -> Dict[str, Any]:
         """Queries the vector index using local Ollama Qwen 2.5 (qwen2.5:7b) model."""
-        relevant_chunks = self.search_similar_chunks(doc_id, question, top_k=top_k)
-
-        if not relevant_chunks:
+        if doc_id not in self.vector_store:
             return {
                 "status": 404,
                 "answer": f"No indexed content found for document ID '{doc_id}'. Please ensure a financial document has been uploaded.",
                 "error": f"No indexed content found for document ID '{doc_id}'.",
+                "sources": [],
+                "doc_id": doc_id
+            }
+
+        relevant_chunks = self.search_similar_chunks(doc_id, question, top_k=top_k)
+
+        if not relevant_chunks:
+            return {
+                "status": 200,
+                "answer": "The requested information could not be found in the uploaded document.",
                 "sources": [],
                 "doc_id": doc_id
             }

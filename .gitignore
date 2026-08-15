@@ -10,3 +10,5 @@ rag_service/venv/
 eval/.venv/
 __pycache__/
 *.pyc
+vector_store.json
+vector_store.json.tmp

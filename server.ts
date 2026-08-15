@@ -175,37 +175,40 @@ async function verifyDocumentOwnership(docId: string, userUid?: string): Promise
   }
 }
 
-// Sector benchmarks definition
-const SECTOR_BENCHMARKS: Record<string, SectorBenchmarks> = {
-  Manufacturing: {
-    sector: "Manufacturing",
-    revenue_per_employee: { p25: 120000, p50: 175000, p75: 240000 },
-    output_per_payroll: { p25: 3.5, p50: 4.2, p75: 5.1 },
-    gross_margin: { p25: 25, p50: 35, p75: 45 },
-    operating_margin: { p25: 5, p50: 12, p75: 20 },
-  },
-  Services: {
-    sector: "Services",
-    revenue_per_employee: { p25: 100000, p50: 145000, p75: 210000 },
-    output_per_payroll: { p25: 2.8, p50: 3.8, p75: 4.9 },
-    gross_margin: { p25: 40, p50: 55, p75: 70 },
-    operating_margin: { p25: 8, p50: 18, p75: 28 },
-  },
-  Retail: {
-    sector: "Retail",
-    revenue_per_employee: { p25: 150000, p50: 190000, p75: 250000 },
-    output_per_payroll: { p25: 4.2, p50: 5.3, p75: 6.5 },
-    gross_margin: { p25: 20, p50: 28, p75: 38 },
-    operating_margin: { p25: 2, p50: 6, p75: 12 },
-  },
-  Other: {
-    sector: "Other",
-    revenue_per_employee: { p25: 110000, p50: 160000, p75: 220000 },
-    output_per_payroll: { p25: 3.2, p50: 4.0, p75: 5.5 },
-    gross_margin: { p25: 28, p50: 38, p75: 50 },
-    operating_margin: { p25: 5, p50: 10, p75: 18 },
-  },
-};
+// Sector benchmarks definition loaded dynamically from config/sector_benchmarks.json
+const benchmarkConfigPath = path.join(process.cwd(), "config", "sector_benchmarks.json");
+const SECTOR_BENCHMARKS: Record<string, SectorBenchmarks> = fs.existsSync(benchmarkConfigPath)
+  ? JSON.parse(fs.readFileSync(benchmarkConfigPath, "utf-8"))
+  : {
+      Manufacturing: {
+        sector: "Manufacturing",
+        revenue_per_employee: { p25: 120000, p50: 175000, p75: 240000 },
+        output_per_payroll: { p25: 3.5, p50: 4.2, p75: 5.1 },
+        gross_margin: { p25: 25, p50: 35, p75: 45 },
+        operating_margin: { p25: 5, p50: 12, p75: 20 },
+      },
+      Services: {
+        sector: "Services",
+        revenue_per_employee: { p25: 100000, p50: 145000, p75: 210000 },
+        output_per_payroll: { p25: 2.8, p50: 3.8, p75: 4.9 },
+        gross_margin: { p25: 40, p50: 55, p75: 70 },
+        operating_margin: { p25: 8, p50: 18, p75: 28 },
+      },
+      Retail: {
+        sector: "Retail",
+        revenue_per_employee: { p25: 150000, p50: 190000, p75: 250000 },
+        output_per_payroll: { p25: 4.2, p50: 5.3, p75: 6.5 },
+        gross_margin: { p25: 20, p50: 28, p75: 38 },
+        operating_margin: { p25: 2, p50: 6, p75: 12 },
+      },
+      Other: {
+        sector: "Other",
+        revenue_per_employee: { p25: 110000, p50: 160000, p75: 220000 },
+        output_per_payroll: { p25: 3.2, p50: 4.0, p75: 5.5 },
+        gross_margin: { p25: 28, p50: 38, p75: 50 },
+        operating_margin: { p25: 5, p50: 10, p75: 18 },
+      },
+    };
 
 // Scoring logic — clearly handles null inputs vs reported zeros
 function calculateScores(metrics: any, sectorName: string): { scores: AssessmentScores, benchmarks: SectorBenchmarks } {
@@ -999,8 +1002,11 @@ app.get("/api/rag/health", optionalAuth, async (req: AuthRequest, res) => {
 app.post("/api/rag/query", optionalAuth, async (req: AuthRequest, res) => {
   try {
     let { doc_id, question, top_k } = req.body;
-    if (!doc_id || !question) {
-      return res.status(400).json({ error: "doc_id and question are required." });
+    if (!doc_id || typeof doc_id !== "string" || doc_id.trim().length === 0 || doc_id.length > 100) {
+      return res.status(400).json({ error: "doc_id parameter is required and must be a string up to 100 characters." });
+    }
+    if (!question || typeof question !== "string" || question.trim().length === 0) {
+      return res.status(400).json({ error: "question parameter is required and must be a non-empty string." });
     }
 
     // Verify document ownership & authorization

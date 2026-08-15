@@ -34,10 +34,11 @@ eval/
 ## Prerequisites
 
 - Python 3.11+
-- The Vantly RAG microservice running at `http://localhost:8000`
-  - **With Docker**: `docker-compose up` from the project root
-  - **Without Docker**: `cd rag_service && python main.py`
-- A valid `GEMINI_API_KEY` in the project `.env` file
+- The Vantly application running at `http://localhost:3000` (Node.js server proxying to Python RAG engine)
+  - **With Docker**: `docker compose up` from the project root
+  - **Without Docker**: `npm start` and `cd rag_service && python main.py`
+- Local Ollama running Qwen 2.5 (`qwen2.5:7b`) for generation
+- A valid `OPENAI_API_KEY` in the project `.env` file (used by RAGAS as evaluation judge via `gpt-4o-mini` and `text-embedding-3-small`)
 
 ## Setup
 
@@ -56,14 +57,11 @@ pip install -r requirements.txt
 ## Running the evaluation
 
 ```bash
-# Default: 3 runs, top_k=5 — routes through the Node.js proxy at localhost:3000
+# Default: 3 runs, top_k=5 — routes through the Node.js proxy at localhost:3000/api/rag
 python evaluate.py
 
 # Equivalent explicit form (Docker stack running):
 python evaluate.py --rag-url http://localhost:3000/api/rag --runs 3
-
-# If running the Python RAG service locally WITHOUT Docker:
-python evaluate.py --rag-url http://localhost:8000
 
 # Custom number of runs
 python evaluate.py --runs 5
@@ -72,22 +70,20 @@ python evaluate.py --runs 5
 python evaluate.py --output results/v2_after_rerank.csv
 ```
 
-> **Note on ports:** Port `8000` (Python RAG service) is _not_ exposed outside Docker.
-> The Node.js server at `:3000` proxies all RAG calls via `/api/rag/health`, `/api/rag/index`,
-> and `/api/rag/query`. The eval script defaults to this proxy URL automatically.
+> **Note on architecture:** The Node.js server at `http://localhost:3000` handles authentication and input validation before proxying RAG calls to the Python microservice (`/api/rag/health`, `/api/rag/index`, and `/api/rag/query`). The evaluation script defaults to `http://localhost:3000/api/rag`.
 
-## Example output
+## Illustrative Example Output
 
 ```
 ─────────────── Vantly RAG Evaluation Harness ───────────────
-  RAG service : http://localhost:8000
+  RAG service : http://localhost:3000/api/rag
   Runs        : 3
   top_k       : 5
   Output      : results/ragas_results.csv
 
 ✓ Loaded 10 QA pairs from ground_truth.yaml
 ✓ Fixture document: meridian_financials.txt (4,312 bytes)
-✓ Service healthy | Gemini API: configured | Docs already indexed: 0
+✓ Service healthy | OpenAI API: configured | Docs already indexed: 0
 ✓ Indexed 14 chunks across 1 pages
 
 ── Run 1 / 3 ──
@@ -100,13 +96,13 @@ python evaluate.py --output results/v2_after_rerank.csv
   Querying (3/3)... ████████████████████ 10/10
 
 ─────────────── RAGAS Evaluation ────────────────────────────
-Building RAGAS evaluator with Gemini 2.0 Flash + text-embedding-004...
+Building RAGAS evaluator with OpenAI gpt-4o-mini + text-embedding-3-small...
 Scoring run 1 (10 samples)...
 Scoring run 2 (10 samples)...
 Scoring run 3 (10 samples)...
 
-─────────────── Results ──────────────────────────────────────
-RAGAS Aggregate Scores  (mean ± std over 3 runs)
+─────────────── Illustrative Results (Example Only) ────────────────
+RAGAS Aggregate Scores (mean ± std over 3 runs)
 ┌──────────────────────┬────────┬─────────┬────────┬────────┐
 │ Metric               │   Mean │ Std Dev │    Min │    Max │
 ├──────────────────────┼────────┼─────────┼────────┼────────┤
@@ -116,7 +112,7 @@ RAGAS Aggregate Scores  (mean ± std over 3 runs)
 │ answer_relevancy     │ 0.9120 │  0.0098 │ 0.9030 │ 0.9210 │
 └──────────────────────┴────────┴─────────┴────────┴────────┘
 ```
-*(Actual scores will depend on your GEMINI_API_KEY and model version.)*
+*(Illustrative output only. Actual scores are computed dynamically based on your evaluation run and stored in `eval/results/`.)*
 
 ## Interpreting results
 
