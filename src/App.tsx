@@ -215,7 +215,7 @@ export default function App() {
     );
   }
 
-  // If not logged in, show beautiful academic Bento Grid login screen
+  // If not logged in, show login screen
   if (!user && !isGuestMode) {
     return (
       <div id="login-landing-container" className="min-h-screen flex flex-col bg-zinc-50 text-zinc-800 transition-colors duration-300">
@@ -583,7 +583,7 @@ export default function App() {
 
               <h2 className="text-2xl font-display font-black text-zinc-950 mb-6 flex items-center gap-2">
                 <Award className="w-6 h-6 text-indigo-600 " />
-                MSc Academic Evaluation Metrics
+                Evaluation Metrics
               </h2>
 
               <div className="space-y-6 text-zinc-600 text-sm leading-relaxed">
@@ -623,7 +623,7 @@ export default function App() {
                 </div>
 
                 <div className="pt-4 border-t border-zinc-200 text-4xs font-bold text-zinc-450 uppercase tracking-wider">
-                  Research Framework: SMEs under 250 employees. Datasets derived from Companies House filings and regional sector analysis (NTU Business School guidelines, 2026).
+                  Framework: SMEs under 250 employees. Benchmarks derived from Companies House filings and regional sector analysis.
                 </div>
               </div>
             </motion.div>

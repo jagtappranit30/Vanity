@@ -16,8 +16,7 @@ Methodology
     precise reference answer verifiable against the fixture).
   - Runs: N=3 by default (configurable). Each run re-queries every
     question independently so we can report mean ± std dev.
-  - RAGAS LLM: OpenAI gpt-4o-mini (via langchain-openai).
-  - RAGAS embeddings: OpenAI text-embedding-3-small.
+  - RAGAS judge: gpt-4o-mini + text-embedding-3-small.
 
 Usage
 -----
@@ -141,13 +140,8 @@ def query_rag(
 
 def build_ragas_evaluator():
     """
-    Wraps OpenAI models in RAGAS LLM/Embedding wrappers.
-    Uses gpt-4o-mini as the judge LLM (cheap, fast, no free-tier daily cap)
-    and text-embedding-3-small for answer relevancy embeddings.
-
-    NOTE: The Vantly app uses local Ollama for RAG queries.
-    Only the RAGAS scoring judge uses OpenAI to ensure
-    reliable evaluation scoring.
+    Builds the RAGAS evaluation judge using gpt-4o-mini and text-embedding-3-small.
+    Returns initialised metrics and their names.
     """
     if not OPENAI_API_KEY:
         console.print(

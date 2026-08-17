@@ -228,7 +228,7 @@ def main():
     console.print(f"\n[green]✓[/green] {OUT_CSV.name}")
     console.print(f"[green]✓[/green] {OUT_SUMMARY.name}")
     console.print(f"[green]✓[/green] {OUT_JSON.name}")
-    console.print("\n[bold green]Paste ragas_scores.json into your dissertation.[/bold green]")
+    console.print("\n[bold green]RAGAS scores saved to ragas_scores.json[/bold green]")
 
 
 def compute_heuristics(df: pd.DataFrame) -> pd.DataFrame:
